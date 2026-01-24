@@ -1,14 +1,8 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { initializeGemini, callGemini } from './gemini';
 import type { Email, LabelRule } from './types';
 
-let geminiClient: GoogleGenerativeAI | null = null;
-
-export async function initializeGemini(apiKey: string) {
-  if (!apiKey) {
-    throw new Error('Gemini API key is required');
-  }
-  geminiClient = new GoogleGenerativeAI(apiKey);
-}
+// Re-export initializeGemini for backward compatibility
+export { initializeGemini };
 
 function hasUnsubscribeLink(email: Email): boolean {
   const content = `${email.body} ${email.snippet}`.toLowerCase();
@@ -109,18 +103,11 @@ async function matchSingleRuleWithGemini(
   email: Email, 
   rule: LabelRule
 ): Promise<{ match: boolean; reasoning: string; rawAnswer: string }> {
-  if (!geminiClient) {
-    throw new Error('Gemini client not initialized. Call initializeGemini first.');
-  }
-
   const prompt = buildClassificationPrompt(email, rule);
+  const modelName = 'gemini-2.0-flash';
 
   try {
-    const model = geminiClient.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text().trim();
+    const text = await callGemini(modelName, prompt);
     
     try {
       // Try to parse JSON directly

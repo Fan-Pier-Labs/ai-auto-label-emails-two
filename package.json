@@ -17,6 +17,7 @@
     "start-background": "./start-background.sh"
   },
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.975.0",
     "@google/generative-ai": "^0.21.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
@@ -50,7 +51,9 @@
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "date-fns": "4.1.0",
+    "dotenv": "^17.2.3",
     "embla-carousel-react": "8.5.1",
+    "geist": "^1.5.1",
     "googleapis": "^129.0.0",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",

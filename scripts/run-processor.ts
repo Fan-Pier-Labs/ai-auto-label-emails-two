@@ -4,6 +4,8 @@ import type { ProcessorConfig } from '../lib/processor';
 import { searchEmails, initializeGmail } from '../lib/gmail';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { config } from 'dotenv';
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
 interface GoogleCreds {
   web?: {
@@ -103,8 +105,31 @@ async function main(params: MainParams): Promise<void> {
 }
 
 /**
+ * Fetches a secret from AWS Secrets Manager
+ */
+async function getSecretFromAWS(secretArn: string): Promise<string> {
+  try {
+    const client = new SecretsManagerClient({ region: 'us-east-2' });
+    const command = new GetSecretValueCommand({ SecretId: secretArn });
+    const response = await client.send(command);
+    
+    if (!response.SecretString) {
+      throw new Error('Secret value is empty or not a string');
+    }
+    
+    return response.SecretString;
+  } catch (error: any) {
+    throw new Error(
+      `❌ Failed to fetch secret from AWS Secrets Manager: ${error.message}\n\n` +
+      `Make sure AWS credentials are configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)\n` +
+      `or use AWS IAM role if running on EC2/ECS/Lambda`
+    );
+  }
+}
+
+/**
  * Test function - runs when file is executed directly
- * Uses ryan@fanpierlabs.com and RYANS_GMAIL_REFRESH_TOKEN from .env
+ * Uses ryan@fanpierlabs.com and fetches refresh token from AWS Secrets Manager
  */
 async function test(): Promise<void> {
   try {
@@ -112,37 +137,18 @@ async function test(): Promise<void> {
     console.log('=========================================\n');
 
     // Load .env file if it exists
-    try {
-      const envPath = join(process.cwd(), '.env');
-      const envContent = readFileSync(envPath, 'utf-8');
-      const envLines = envContent.split('\n');
-      
-      for (const line of envLines) {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith('#')) {
-          const [key, ...valueParts] = trimmed.split('=');
-          if (key && valueParts.length > 0) {
-            const value = valueParts.join('=').trim();
-            if (!process.env[key]) {
-              process.env[key] = value;
-            }
-          }
-        }
-      }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
-        console.warn('⚠️  Could not load .env file:', error.message);
-      }
-    }
+    config();
       
 
-    // Get required parameters from environment
-    const gmailRefreshToken = process.env.RYANS_GMAIL_REFRESH_TOKEN;
+    // Get required parameters - fetch refresh token from AWS Secrets Manager
+    const secretArn = 'arn:aws:secretsmanager:us-east-2:555985150976:secret:ryan-gmail-refresh-token-qv3WLe';
+    console.log('🔐 Fetching Gmail refresh token from AWS Secrets Manager...');
+    const gmailRefreshToken = await getSecretFromAWS(secretArn);
+    
     if (!gmailRefreshToken) {
       throw new Error(
-        '❌ Missing Gmail refresh token!\n\n' +
-        'Set RYANS_GMAIL_REFRESH_TOKEN environment variable\n' +
-        'Run: bun run scripts/get-refresh-token.ts to get your refresh token'
+        '❌ Gmail refresh token is empty!\n\n' +
+        'Check the secret value in AWS Secrets Manager'
       );
     }
 
