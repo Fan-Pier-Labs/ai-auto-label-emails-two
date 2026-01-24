@@ -48,3 +48,7 @@ todo
 - the automatino rules should be enabled/disabled with binary yes/no in the google sheets in cells G:H
 
 - add usage analytics. just keep track of usage, dont log email contents
+
+- add sentry
+
+- maybe for redirects also check parent subdomains too
