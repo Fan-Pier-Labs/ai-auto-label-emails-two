@@ -210,8 +210,8 @@ async function test(): Promise<void> {
     const googleSheetsUrl = 'https://docs.google.com/spreadsheets/d/1T9vwarXB3ICksZpP4gHw-rllKve0j2tKBDEEEsIVEAM/edit?gid=0#gid=0'
     const processedLabel = process.env.PROCESSED_LABEL || '__auto-processed__';
     const dryRun = process.env.DRY_RUN !== undefined ? process.env.DRY_RUN === 'true' : true; // Default: true
-    const maxEmails = process.env.MAX_EMAILS ? parseInt(process.env.MAX_EMAILS, 10) : 10; // Default: 10
-    const lookbackHours = process.env.LOOKBACK_HOURS ? parseInt(process.env.LOOKBACK_HOURS, 10) : undefined;
+    const maxEmails = 20
+    const lookbackHours = 30
     const useInMemoryTracking = process.env.USE_IN_MEMORY_TRACKING !== undefined ? process.env.USE_IN_MEMORY_TRACKING === 'true' : true; // Default: true
 
     // Call main with user's parameters
