@@ -14,7 +14,8 @@
     "get-token": "bun run scripts/get-refresh-token.ts",
     "process-emails": "bun run scripts/run-processor.ts",
     "test-email": "bun run scripts/run-processor.ts --test",
-    "start-background": "./start-background.sh"
+    "start-background": "./start-background.sh",
+    "test": "bun test"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.975.0",

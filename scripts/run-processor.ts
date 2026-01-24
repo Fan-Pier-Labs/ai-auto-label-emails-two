@@ -26,6 +26,9 @@ interface MainParams {
   processedLabel?: string;
   dryRun?: boolean;
   query?: string;
+  maxEmails?: number;
+  lookbackHours?: number;
+  useInMemoryTracking?: boolean;
 }
 
 async function main(params: MainParams): Promise<void> {
@@ -66,6 +69,7 @@ async function main(params: MainParams): Promise<void> {
     }
 
     // Create config from parameters
+    const useInMemoryTracking = params.useInMemoryTracking ?? false;
     const config: ProcessorConfig = {
       gmail: {
         clientId: gmailClientId,
@@ -74,29 +78,67 @@ async function main(params: MainParams): Promise<void> {
       },
       geminiApiKey: params.geminiApiKey,
       googleSheetsUrl: params.googleSheetsUrl,
-      processedLabel: params.processedLabel || '__auto-processed__',
+      processedLabel: useInMemoryTracking ? '' : (params.processedLabel || '__auto-processed__'),
       dryRun: params.dryRun || false,
+      useInMemoryTracking,
     };
 
     if (config.dryRun) {
       console.log('⚠️  DRY RUN MODE - No labels will be applied\n');
     }
 
-    const query = params.query || 'in:inbox';
+    // Build query with lookback time filter
+    const lookbackHours = params.lookbackHours ?? 24;
+    const baseQuery = params.query || 'in:inbox';
+    let query = `${baseQuery} newer_than:${lookbackHours}h`;
+    
+    // Exclude already-processed emails if using label tracking (not in-memory)
+    if (!useInMemoryTracking && config.processedLabel) {
+      query = `${query} -label:${config.processedLabel}`;
+    }
+    
+    const maxEmails = params.maxEmails ?? 1;
+    
     console.log(`📧 Processing emails for: ${params.emailAddress}`);
-    console.log(`🔍 Search query: ${query}\n`);
+    console.log(`🔍 Search query: ${query}`);
+    console.log(`📊 Max emails to process: ${maxEmails}`);
+    console.log(`⏰ Looking back: ${lookbackHours} hours`);
+    console.log(`📝 Tracking: ${useInMemoryTracking ? 'In-memory' : `Label (${config.processedLabel})`}\n`);
 
     // Initialize Gmail before searching
     await initializeGmail(config.gmail);
 
-    const emailIds = await searchEmails(query, 1);
+    const emailIds = await searchEmails(query, maxEmails);
     
     if (emailIds.length === 0) {
       console.log('❌ No emails found matching query');
       return;
     }
 
-    await processEmail(config, emailIds[0]);
+    console.log(`📬 Found ${emailIds.length} email(s) to process\n`);
+
+    // Track processed emails in memory if enabled
+    const processedEmailIds = new Set<string>();
+
+    // Process all found emails
+    for (let i = 0; i < emailIds.length; i++) {
+      const emailId = emailIds[i];
+      
+      // Skip if already processed (in-memory tracking)
+      if (useInMemoryTracking && processedEmailIds.has(emailId)) {
+        console.log(`\n[${i + 1}/${emailIds.length}] ⏭️  Skipping (already processed)`);
+        continue;
+      }
+
+      console.log(`\n[${i + 1}/${emailIds.length}]`);
+      await processEmail(config, emailId);
+      
+      // Mark as processed in memory
+      if (useInMemoryTracking) {
+        processedEmailIds.add(emailId);
+      }
+    }
+    
     console.log('\n✅ Processing complete\n');
   } catch (error: any) {
     console.error('\n❌ Fatal error:', error.message);
@@ -117,7 +159,8 @@ async function getSecretFromAWS(secretArn: string): Promise<string> {
       throw new Error('Secret value is empty or not a string');
     }
     
-    return response.SecretString;
+    // Trim whitespace and newlines that might be present in the secret value
+    return response.SecretString.trim();
   } catch (error: any) {
     throw new Error(
       `❌ Failed to fetch secret from AWS Secrets Manager: ${error.message}\n\n` +
@@ -151,6 +194,8 @@ async function test(): Promise<void> {
         'Check the secret value in AWS Secrets Manager'
       );
     }
+    
+    console.log(`✅ Refresh token fetched (length: ${gmailRefreshToken.length} chars)`);
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (!geminiApiKey) {
@@ -161,10 +206,13 @@ async function test(): Promise<void> {
       );
     }
 
-    // Get optional parameters
-    const googleSheetsUrl = process.env.GOOGLE_SHEETS_URL || process.env.GOOGLE_SHEETS_ID;
+    // Get optional parameters (with defaults for test function)
+    const googleSheetsUrl = 'https://docs.google.com/spreadsheets/d/1T9vwarXB3ICksZpP4gHw-rllKve0j2tKBDEEEsIVEAM/edit?gid=0#gid=0'
     const processedLabel = process.env.PROCESSED_LABEL || '__auto-processed__';
-    const dryRun = process.env.DRY_RUN === 'true';
+    const dryRun = process.env.DRY_RUN !== undefined ? process.env.DRY_RUN === 'true' : true; // Default: true
+    const maxEmails = process.env.MAX_EMAILS ? parseInt(process.env.MAX_EMAILS, 10) : 10; // Default: 10
+    const lookbackHours = process.env.LOOKBACK_HOURS ? parseInt(process.env.LOOKBACK_HOURS, 10) : undefined;
+    const useInMemoryTracking = process.env.USE_IN_MEMORY_TRACKING !== undefined ? process.env.USE_IN_MEMORY_TRACKING === 'true' : true; // Default: true
 
     // Call main with user's parameters
     await main({
@@ -175,6 +223,9 @@ async function test(): Promise<void> {
       processedLabel,
       dryRun,
       query: 'in:inbox',
+      maxEmails,
+      lookbackHours,
+      useInMemoryTracking,
     });
 
     console.log('\n✅ Test complete!\n');

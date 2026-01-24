@@ -7,4 +7,8 @@
 
 - add a button in th
 
-- fix the font on the omepage
+- fix the font on the demo on the homepage to work (in progress)
+
+
+- add a few more deterministic rules
+- 

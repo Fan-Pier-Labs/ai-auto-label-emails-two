@@ -24,7 +24,24 @@ export async function initializeGmail(config: GmailConfig): Promise<void> {
     refresh_token: config.refreshToken,
   });
 
-  console.log('[Gmail] OAuth client initialized');
+  // Test the token by attempting to get an access token
+  try {
+    await oauth2Client.getAccessToken();
+    console.log('[Gmail] OAuth client initialized and token validated');
+  } catch (error: any) {
+    if (error.message?.includes('invalid_grant')) {
+      throw new Error(
+        '❌ Invalid refresh token!\n\n' +
+        'The refresh token is expired, revoked, or doesn\'t match your OAuth credentials.\n\n' +
+        'To fix this:\n' +
+        '1. Make sure the client_id and client_secret in google_creds.json match the ones used to generate the token\n' +
+        '2. Regenerate the refresh token by running: bun run scripts/get-refresh-token.ts\n' +
+        '3. Update the token in AWS Secrets Manager with the new value\n\n' +
+        `Original error: ${error.message}`
+      );
+    }
+    throw error;
+  }
 }
 
 /**
@@ -40,7 +57,7 @@ function getClient(): OAuth2Client {
 /**
  * Search for emails matching a query
  */
-export async function searchEmails(query: string, maxResults: number = 50): Promise<string[]> {
+export async function searchEmails(query: string, maxResults: number = 50, quiet: boolean = false): Promise<string[]> {
   const client = getClient();
   const gmail = google.gmail({ version: 'v1', auth: client });
 
@@ -52,12 +69,102 @@ export async function searchEmails(query: string, maxResults: number = 50): Prom
     });
 
     const messageIds = response.data.messages?.map(m => m.id!) || [];
-    console.log(`[Gmail] Found ${messageIds.length} emails matching: ${query}`);
+    if (!quiet) {
+      console.log(`[Gmail] Found ${messageIds.length} emails matching: ${query}`);
+    }
     return messageIds;
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message?.includes('invalid_grant')) {
+      throw new Error(
+        '❌ Invalid refresh token!\n\n' +
+        'The refresh token is expired, revoked, or doesn\'t match your OAuth credentials.\n\n' +
+        'To fix this:\n' +
+        '1. Make sure the client_id and client_secret in google_creds.json match the ones used to generate the token\n' +
+        '2. Regenerate the refresh token by running: bun run scripts/get-refresh-token.ts\n' +
+        '3. Update the token in AWS Secrets Manager with the new value'
+      );
+    }
     console.error('[Gmail] Error searching emails:', error);
     throw error;
   }
+}
+
+/**
+ * Check if we've received emails from a specific domain (excluding current email)
+ */
+export async function hasReceivedFromDomain(domain: string, excludeEmailId?: string): Promise<boolean> {
+  // Escape special characters in domain for Gmail search
+  const escapedDomain = domain.replace(/[()]/g, '');
+  const query = `from:${escapedDomain}`;
+  // Search for 2 results to check if there are others besides the current email
+  const results = await searchEmails(query, 2, true); // quiet mode
+  
+  if (results.length === 0) {
+    return false;
+  }
+  
+  // If we're excluding the current email, check if there are other results
+  if (excludeEmailId) {
+    // If we have 2+ results, we've definitely seen this domain before
+    if (results.length > 1) {
+      return true;
+    }
+    // If we have 1 result and it's not the current email, we've seen it before
+    return results[0] !== excludeEmailId;
+  }
+  
+  // If not excluding, any result means we've seen it
+  return true;
+}
+
+/**
+ * Check if we've received emails from a specific address (excluding current email)
+ */
+export async function hasReceivedFromAddress(address: string, excludeEmailId?: string): Promise<boolean> {
+  // Escape special characters in address for Gmail search
+  const escapedAddress = address.replace(/[()]/g, '');
+  const query = `from:${escapedAddress}`;
+  // Search for 2 results to check if there are others besides the current email
+  const results = await searchEmails(query, 2, true); // quiet mode
+  
+  if (results.length === 0) {
+    return false;
+  }
+  
+  // If we're excluding the current email, check if there are other results
+  if (excludeEmailId) {
+    // If we have 2+ results, we've definitely seen this address before
+    if (results.length > 1) {
+      return true;
+    }
+    // If we have 1 result and it's not the current email, we've seen it before
+    return results[0] !== excludeEmailId;
+  }
+  
+  // If not excluding, any result means we've seen it
+  return true;
+}
+
+/**
+ * Check if we've sent emails to a specific domain
+ */
+export async function hasSentToDomain(domain: string): Promise<boolean> {
+  // Escape special characters in domain for Gmail search
+  const escapedDomain = domain.replace(/[()]/g, '');
+  const query = `to:${escapedDomain} in:sent`;
+  const results = await searchEmails(query, 1, true); // quiet mode
+  return results.length > 0;
+}
+
+/**
+ * Check if we've sent emails to a specific address
+ */
+export async function hasSentToAddress(address: string): Promise<boolean> {
+  // Escape special characters in address for Gmail search
+  const escapedAddress = address.replace(/[()]/g, '');
+  const query = `to:${escapedAddress} in:sent`;
+  const results = await searchEmails(query, 1, true); // quiet mode
+  return results.length > 0;
 }
 
 /**

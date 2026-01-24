@@ -1,9 +1,8 @@
-import { initializeGmail, searchEmails, getEmail, applyLabels, buildEmailHistory } from './gmail';
+import { initializeGmail, searchEmails, getEmail, applyLabels } from './gmail';
 import { initializeGemini, applyAILabels } from './ai-labeler';
-import { applyDeterministicLabels, updateHistory } from './deterministic';
+import { applyDeterministicLabels } from './deterministic';
 import { fetchRulesFromSheet, extractSpreadsheetId } from './sheets';
 import type { GmailConfig } from './gmail';
-import type { EmailHistory } from './types';
 
 export interface ProcessorConfig {
   gmail: GmailConfig;
@@ -11,6 +10,7 @@ export interface ProcessorConfig {
   googleSheetsUrl?: string;
   processedLabel: string;
   dryRun: boolean;
+  useInMemoryTracking?: boolean;
 }
 
 /**
@@ -41,32 +41,44 @@ export async function processEmail(
       }
     }
 
-    // Build email history for deterministic rules
-    const emailHistory: EmailHistory = await buildEmailHistory();
-
     // Fetch email
     const email = await getEmail(emailId);
     
     console.log(`\n📧 Processing: ${email.subject}`);
-    console.log(`   From: ${email.from}`);
+    console.log(`   From: ${email.from}\n`);
 
     const allLabels: string[] = [];
 
-    // Apply deterministic labels
-    const deterministicLabels = applyDeterministicLabels(email, emailHistory);
-    allLabels.push(...deterministicLabels);
+    // Apply deterministic labels (uses Gmail search, no history needed)
+    console.log('Deterministic Rules:');
+    const deterministicResult = await applyDeterministicLabels(email);
+    allLabels.push(...deterministicResult.labels);
     
-    // Update history
-    updateHistory(email, emailHistory);
+    // Display all deterministic rule results
+    for (const result of deterministicResult.results) {
+      const symbol = result.matched ? '✓' : 'x';
+      console.log(`  [${symbol}] ${result.ruleName} - ${result.reason}`);
+    }
 
     // Apply AI labels
     if (rules.length > 0) {
+      console.log('\nAI Rules:');
       const aiResult = await applyAILabels(email, rules);
       allLabels.push(...aiResult.labels);
+      
+      // Display all AI rule results
+      for (const result of aiResult.results) {
+        const symbol = result.matched ? '✓' : 'x';
+        console.log(`  [${symbol}] ${result.ruleName} - ${result.reason}`);
+      }
+    } else {
+      console.log('\nAI Rules: (none configured)');
     }
 
-    // Add processed label
-    allLabels.push(config.processedLabel);
+    // Add processed label (only if not using in-memory tracking)
+    if (!config.useInMemoryTracking && config.processedLabel) {
+      allLabels.push(config.processedLabel);
+    }
 
     // Apply labels to Gmail
     if (allLabels.length > 0) {

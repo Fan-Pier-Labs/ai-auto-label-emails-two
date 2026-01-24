@@ -94,7 +94,7 @@ export function Options() {
               <p className="mb-1 text-3xl font-bold text-foreground">$9<span className="text-lg font-normal text-muted-foreground">/month</span></p>
               <p className="mb-4 text-sm text-muted-foreground">Cancel anytime</p>
               <Button asChild className="w-full">
-                <Link href="https://fanpierlabs.com/autolabel" target="_blank">
+                <Link href="/api/auth/gmail">
                   Get Started
                 </Link>
               </Button>

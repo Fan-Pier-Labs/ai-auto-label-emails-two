@@ -1,10 +1,10 @@
 import { initializeGemini, callGemini } from './gemini';
-import type { Email, LabelRule } from './types';
+import type { Email, LabelRule, RuleResult } from './types';
 
 // Re-export initializeGemini for backward compatibility
 export { initializeGemini };
 
-function hasUnsubscribeLink(email: Email): boolean {
+export function hasUnsubscribeLink(email: Email): boolean {
   const content = `${email.body} ${email.snippet}`.toLowerCase();
   
   const unsubscribePatterns = [
@@ -26,7 +26,7 @@ function hasUnsubscribeLink(email: Email): boolean {
   return hasPattern || hasUrl;
 }
 
-function buildClassificationPrompt(email: Email, rule: LabelRule): string {
+export function buildClassificationPrompt(email: Email, rule: LabelRule): string {
   const emailContent = `${email.subject}\n\n${email.body || email.snippet}`;
   
   return `You are a strict email classification assistant. You must be VERY conservative and only match emails that CLEARLY and EXACTLY match the rule description.
@@ -57,18 +57,28 @@ Does this email CLEARLY and EXACTLY match the rule description? Be very strict. 
 export async function applyAILabels(
   email: Email,
   rules: LabelRule[]
-): Promise<{ labels: string[]; explanations: Record<string, string> }> {
+): Promise<{ labels: string[]; explanations: Record<string, string>; results: RuleResult[] }> {
   const labels: string[] = [];
   const explanations: Record<string, string> = {};
+  const results: RuleResult[] = [];
   const emailContent = `${email.subject} ${email.body} ${email.snippet}`.toLowerCase();
 
-  console.log(`  Email with title: ${email.subject}`);
-
   // Static rule: Check for unsubscribe links
-  if (hasUnsubscribeLink(email)) {
+  const hasUnsubscribe = hasUnsubscribeLink(email);
+  if (hasUnsubscribe) {
     labels.push('Has-Unsubscribe');
     explanations['Has-Unsubscribe'] = 'Email contains unsubscribe link';
-    console.log(`  ✓ Matched static rule: Has-Unsubscribe`);
+    results.push({
+      ruleName: 'Has-Unsubscribe',
+      matched: true,
+      reason: 'Email contains unsubscribe link',
+    });
+  } else {
+    results.push({
+      ruleName: 'Has-Unsubscribe',
+      matched: false,
+      reason: 'No unsubscribe link found in email',
+    });
   }
 
   // Process each rule separately with its own LLM call
@@ -80,7 +90,11 @@ export async function applyAILabels(
     if (simpleMatch) {
       labels.push(rule.label);
       explanations[rule.label] = `Simple match: "${rule.prompt}"`;
-      console.log(`  ✓ Matched rule: ${rule.label} - ${rule.prompt}`);
+      results.push({
+        ruleName: rule.label,
+        matched: true,
+        reason: `Simple text match: "${rule.prompt}"`,
+      });
       continue;
     }
 
@@ -90,13 +104,21 @@ export async function applyAILabels(
     if (result.match) {
       labels.push(rule.label);
       explanations[rule.label] = result.reasoning;
-      console.log(`  ✓ Matched rule: ${rule.label} - ${rule.prompt} [AI: ${result.rawAnswer}] (${result.reasoning})`);
+      results.push({
+        ruleName: rule.label,
+        matched: true,
+        reason: result.reasoning || 'AI matched the rule',
+      });
     } else {
-      console.log(`  ✗ Did not match rule: ${rule.label} - ${rule.prompt} [AI: ${result.rawAnswer}] (${result.reasoning})`);
+      results.push({
+        ruleName: rule.label,
+        matched: false,
+        reason: result.reasoning || 'AI determined email does not match rule',
+      });
     }
   }
 
-  return { labels, explanations };
+  return { labels, explanations, results };
 }
 
 async function matchSingleRuleWithGemini(

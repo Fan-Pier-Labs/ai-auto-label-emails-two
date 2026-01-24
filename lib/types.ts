@@ -39,3 +39,9 @@ export interface ClassifyEmailResponse {
   labels: string[];
   explanations: Record<string, string>;
 }
+
+export interface RuleResult {
+  ruleName: string;
+  matched: boolean;
+  reason: string;
+}

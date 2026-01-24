@@ -4,6 +4,8 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import http from 'http';
 import { parse as parseUrl } from 'url';
+import { SecretsManagerClient, UpdateSecretCommand } from '@aws-sdk/client-secrets-manager';
+import net from 'net';
 
 interface GoogleCreds {
   web?: {
@@ -17,10 +19,63 @@ interface GoogleCreds {
 }
 
 const SCOPES = ['https://www.googleapis.com/auth/gmail.modify'];
-const REDIRECT_URI = 'http://localhost:8080';
+const START_PORT = 8080;
+const MAX_PORT_ATTEMPTS = 100; // Try up to 100 ports (8080-8179)
+const SECRET_ARN = 'arn:aws:secretsmanager:us-east-2:555985150976:secret:ryan-gmail-refresh-token-qv3WLe';
+
+/**
+ * Check if a port is available
+ */
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.listen(port, () => {
+      server.once('close', () => resolve(true));
+      server.close();
+    });
+    server.on('error', () => resolve(false));
+  });
+}
+
+/**
+ * Find an available port starting from START_PORT
+ */
+async function findAvailablePort(): Promise<number> {
+  for (let port = START_PORT; port < START_PORT + MAX_PORT_ATTEMPTS; port++) {
+    if (await isPortAvailable(port)) {
+      return port;
+    }
+  }
+  throw new Error(`Could not find an available port in range ${START_PORT}-${START_PORT + MAX_PORT_ATTEMPTS - 1}`);
+}
+
+/**
+ * Update AWS Secrets Manager with the new refresh token
+ */
+async function updateAWSSecret(refreshToken: string): Promise<void> {
+  try {
+    console.log('🔄 Updating AWS Secrets Manager...');
+    const client = new SecretsManagerClient({ region: 'us-east-2' });
+    const command = new UpdateSecretCommand({
+      SecretId: SECRET_ARN,
+      SecretString: refreshToken,
+    });
+    await client.send(command);
+    console.log('✅ Successfully updated AWS Secrets Manager!\n');
+  } catch (error: any) {
+    console.error('⚠️  Failed to update AWS Secrets Manager:', error.message);
+    console.error('   You can manually update it later with the token shown above.\n');
+  }
+}
 
 async function getRefreshToken() {
   try {
+    // Find an available port
+    console.log('🔍 Finding an available port...');
+    const port = await findAvailablePort();
+    const redirectUri = `http://localhost:${port}`;
+    console.log(`✅ Found available port: ${port}\n`);
+
     // Load credentials
     const credsPath = join(process.cwd(), 'google_creds.json');
     const credsContent = readFileSync(credsPath, 'utf-8');
@@ -34,7 +89,7 @@ async function getRefreshToken() {
     const oauth2Client = new google.auth.OAuth2(
       webCreds.client_id,
       webCreds.client_secret,
-      REDIRECT_URI
+      redirectUri
     );
 
     // Generate auth URL
@@ -49,7 +104,7 @@ async function getRefreshToken() {
     console.log('1. Click the link below to authorize access');
     console.log('2. Sign in with your Gmail account');
     console.log('3. Grant permissions');
-    console.log('4. You will be redirected to localhost:8080\n');
+    console.log(`4. You will be redirected to ${redirectUri}\n`);
     console.log('🔗 Authorization URL:');
     console.log(authUrl);
     console.log('\n⏳ Waiting for authorization...\n');
@@ -76,7 +131,13 @@ async function getRefreshToken() {
             }
 
             console.log('✅ Authorization successful!\n');
-            console.log('📝 Add this to your .env.local file:\n');
+            console.log('📝 Refresh token obtained:');
+            console.log(`   ${tokens.refresh_token.substring(0, 20)}...${tokens.refresh_token.substring(tokens.refresh_token.length - 10)}\n`);
+
+            // Update AWS Secrets Manager
+            // await updateAWSSecret(tokens.refresh_token);
+
+            console.log('📝 You can also add this to your .env.local file:\n');
             console.log(`GMAIL_CLIENT_ID=${webCreds.client_id}`);
             console.log(`GMAIL_CLIENT_SECRET=${webCreds.client_secret}`);
             console.log(`GMAIL_REFRESH_TOKEN=${tokens.refresh_token}`);
@@ -90,8 +151,16 @@ async function getRefreshToken() {
         }
       });
 
-      server.listen(8080, () => {
-        console.log('🌐 Local server started on http://localhost:8080');
+      server.listen(port, () => {
+        console.log(`🌐 Local server started on ${redirectUri}`);
+      });
+
+      server.on('error', (error: any) => {
+        if (error.code === 'EADDRINUSE') {
+          reject(new Error(`Port ${port} became unavailable. Please try again.`));
+        } else {
+          reject(error);
+        }
       });
 
       // Timeout after 5 minutes
