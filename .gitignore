@@ -4,7 +4,11 @@ dist/
 build/
 .env
 .env.local
+google_creds.json
 *.log
 .DS_Store
 .vscode/
 .idea/
+
+
+google_creds.json

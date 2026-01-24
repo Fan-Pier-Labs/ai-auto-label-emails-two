@@ -1,0 +1,16 @@
+platform: "fargate"
+app_name: "project-name"
+aws:
+  profile: "aws-profile-name"
+  region: "us-east-2"
+public:
+  domain: "project-name.domain.com"
+
+task:
+  cpu: 1024
+  memory: 2048
+  spot: true
+  replicas: 1
+
+# Change this to true after you set the name of this project. 
+allow_create: false

@@ -12,6 +12,7 @@ export interface ProcessorConfig {
   pollIntervalMinutes: number;
   processedLabel: string;
   dryRun: boolean;
+  emailAddress?: string; // Email address to process (defaults to 'me' for authenticated user)
 }
 
 export class EmailProcessor {
@@ -113,7 +114,12 @@ export class EmailProcessor {
    */
   async processUnprocessedEmails(): Promise<void> {
     try {
-      const query = `newer_than:1d -label:${this.config.processedLabel}`;
+      // Search for emails to the configured email address
+      const emailAddress = this.config.emailAddress || 'me';
+      const query = emailAddress === 'me' 
+        ? `newer_than:1d -label:${this.config.processedLabel}`
+        : `to:${emailAddress} newer_than:1d -label:${this.config.processedLabel}`;
+      
       console.log(`\n🔍 Searching for unprocessed emails: ${query}`);
 
       const emailIds = await searchEmails(query, 50);

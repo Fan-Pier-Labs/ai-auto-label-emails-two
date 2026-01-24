@@ -99,6 +99,8 @@ To automatically label emails in your Gmail inbox:
 
 ### 2. Get Refresh Token
 
+Make sure you have `google_creds.json` in the project root (downloaded from Google Cloud Console).
+
 Run the setup script:
 
 ```bash
@@ -106,31 +108,40 @@ bun run get-token
 ```
 
 This will:
-1. Open your browser
-2. Ask you to authorize the app
-3. Display your refresh token
+1. Load credentials from `google_creds.json`
+2. Open your browser
+3. Ask you to authorize the app
+4. Display your refresh token
 
-Copy the credentials to `.env.local`:
+Copy the refresh token to `.env.local`:
 
 ```bash
-GMAIL_CLIENT_ID=your_client_id
-GMAIL_CLIENT_SECRET=your_client_secret
 GMAIL_REFRESH_TOKEN=your_refresh_token
 ```
 
+**Note**: Client ID and Secret are automatically loaded from `google_creds.json`, so you only need the refresh token in your environment.
+
 ### 3. Run the Email Processor
 
-Start the background processor:
+Start the background processor (runs continuously in a loop):
 
 ```bash
+# Simple way
+bun run start-background
+
+# Or directly
 bun run process-emails
 ```
 
 This will:
+- Run continuously in a background loop (not triggered by API calls)
 - Check for new emails every 5 minutes (configurable)
+- Process emails for: ryan@fanpierlabs.com (or set EMAIL_ADDRESS)
 - Apply deterministic labels (first-time senders, etc.)
 - Apply AI labels based on your rules
 - Mark emails as processed
+
+**Note**: This runs as a separate background process, independent of the web API. It will keep running until you stop it (Ctrl+C).
 
 ### 4. Test with a Single Email
 

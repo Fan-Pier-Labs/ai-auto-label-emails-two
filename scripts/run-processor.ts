@@ -1,20 +1,60 @@
 #!/usr/bin/env node
 import { EmailProcessor } from '../lib/processor';
 import type { ProcessorConfig } from '../lib/processor';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+interface GoogleCreds {
+  web?: {
+    client_id: string;
+    client_secret: string;
+  };
+  installed?: {
+    client_id: string;
+    client_secret: string;
+  };
+}
 
 function loadConfig(): ProcessorConfig {
-  // Gmail OAuth
-  const gmailClientId = process.env.GMAIL_CLIENT_ID;
-  const gmailClientSecret = process.env.GMAIL_CLIENT_SECRET;
+  // Load Gmail OAuth credentials from google_creds.json
+  let gmailClientId: string | undefined;
+  let gmailClientSecret: string | undefined;
+
+  try {
+    const credsPath = join(process.cwd(), 'google_creds.json');
+    const credsContent = readFileSync(credsPath, 'utf-8');
+    const creds: GoogleCreds = JSON.parse(credsContent);
+
+    const webCreds = creds.web || creds.installed;
+    if (webCreds) {
+      gmailClientId = webCreds.client_id;
+      gmailClientSecret = webCreds.client_secret;
+    }
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      throw new Error(
+        '❌ google_creds.json not found!\n\n' +
+        'Please create google_creds.json in the project root with your OAuth credentials.\n' +
+        'Download it from: https://console.cloud.google.com/apis/credentials'
+      );
+    }
+    throw new Error(`❌ Error reading google_creds.json: ${error.message}`);
+  }
+
+  if (!gmailClientId || !gmailClientSecret) {
+    throw new Error(
+      '❌ Missing client_id or client_secret in google_creds.json!\n\n' +
+      'Make sure google_creds.json has either "web" or "installed" section with client_id and client_secret.'
+    );
+  }
+
+  // Refresh token still comes from environment
   const gmailRefreshToken = process.env.GMAIL_REFRESH_TOKEN;
 
-  if (!gmailClientId || !gmailClientSecret || !gmailRefreshToken) {
+  if (!gmailRefreshToken) {
     throw new Error(
-      '❌ Missing Gmail OAuth credentials!\n\n' +
-      'Required environment variables:\n' +
-      '  - GMAIL_CLIENT_ID\n' +
-      '  - GMAIL_CLIENT_SECRET\n' +
-      '  - GMAIL_REFRESH_TOKEN\n\n' +
+      '❌ Missing Gmail refresh token!\n\n' +
+      'Set GMAIL_REFRESH_TOKEN environment variable\n' +
       'Run: bun run scripts/get-refresh-token.ts to get your refresh token'
     );
   }
@@ -34,6 +74,7 @@ function loadConfig(): ProcessorConfig {
   const pollIntervalMinutes = parseInt(process.env.POLL_INTERVAL_MINUTES || '5', 10);
   const processedLabel = process.env.PROCESSED_LABEL || '__auto-processed__';
   const dryRun = process.env.DRY_RUN === 'true';
+  const emailAddress = process.env.EMAIL_ADDRESS || 'ryan@fanpierlabs.com'; // Default to your email
 
   return {
     gmail: {
@@ -46,6 +87,7 @@ function loadConfig(): ProcessorConfig {
     pollIntervalMinutes,
     processedLabel,
     dryRun,
+    emailAddress,
   };
 }
 
