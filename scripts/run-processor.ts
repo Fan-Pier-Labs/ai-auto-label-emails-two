@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { processEmail } from '../lib/processor';
 import type { ProcessorConfig } from '../lib/processor';
-import { searchEmails } from '../lib/gmail';
+import { searchEmails, initializeGmail } from '../lib/gmail';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -16,121 +16,89 @@ interface GoogleCreds {
   };
 }
 
-function loadConfig(): Omit<ProcessorConfig, 'gmail'> & { gmail: { clientId: string; clientSecret: string } } {
-  // Load Gmail OAuth credentials from google_creds.json
-  let gmailClientId: string | undefined;
-  let gmailClientSecret: string | undefined;
-
-  try {
-    const credsPath = join(process.cwd(), 'google_creds.json');
-    const credsContent = readFileSync(credsPath, 'utf-8');
-    const creds: GoogleCreds = JSON.parse(credsContent);
-
-    const webCreds = creds.web || creds.installed;
-    if (webCreds) {
-      gmailClientId = webCreds.client_id;
-      gmailClientSecret = webCreds.client_secret;
-    }
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      throw new Error(
-        '❌ google_creds.json not found!\n\n' +
-        'Please create google_creds.json in the project root with your OAuth credentials.\n' +
-        'Download it from: https://console.cloud.google.com/apis/credentials'
-      );
-    }
-    throw new Error(`❌ Error reading google_creds.json: ${error.message}`);
-  }
-
-  if (!gmailClientId || !gmailClientSecret) {
-    throw new Error(
-      '❌ Missing client_id or client_secret in google_creds.json!\n\n' +
-      'Make sure google_creds.json has either "web" or "installed" section with client_id and client_secret.'
-    );
-  }
-
-  // Gemini API
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  if (!geminiApiKey) {
-    throw new Error(
-      '❌ Missing Gemini API key!\n\n' +
-      'Set GEMINI_API_KEY environment variable\n' +
-      'Get your key from: https://makersuite.google.com/app/apikey'
-    );
-  }
-
-  // Optional configs
-  const googleSheetsUrl = process.env.GOOGLE_SHEETS_URL || process.env.GOOGLE_SHEETS_ID;
-  const processedLabel = process.env.PROCESSED_LABEL || '__auto-processed__';
-  const dryRun = process.env.DRY_RUN === 'true';
-
-  return {
-    gmail: {
-      clientId: gmailClientId,
-      clientSecret: gmailClientSecret,
-    },
-    geminiApiKey,
-    googleSheetsUrl,
-    processedLabel,
-    dryRun,
-  } as Omit<ProcessorConfig, 'gmail'> & { gmail: { clientId: string; clientSecret: string } };
+interface MainParams {
+  emailAddress: string;
+  gmailRefreshToken: string;
+  geminiApiKey: string;
+  googleSheetsUrl?: string;
+  processedLabel?: string;
+  dryRun?: boolean;
+  query?: string;
 }
 
-async function main() {
+async function main(params: MainParams): Promise<void> {
   try {
     console.log('📧 Auto Label Email - Background Processor\n');
     console.log('=========================================\n');
 
-    // Load refresh token from environment
-    const gmailRefreshToken = process.env.RYANS_GMAIL_REFRESH_TOKEN || process.env.GMAIL_REFRESH_TOKEN;
-    if (!gmailRefreshToken) {
+    // Load Gmail OAuth credentials from google_creds.json
+    let gmailClientId: string | undefined;
+    let gmailClientSecret: string | undefined;
+
+    try {
+      const credsPath = join(process.cwd(), 'google_creds.json');
+      const credsContent = readFileSync(credsPath, 'utf-8');
+      const creds: GoogleCreds = JSON.parse(credsContent);
+
+      const webCreds = creds.web || creds.installed;
+      if (webCreds) {
+        gmailClientId = webCreds.client_id;
+        gmailClientSecret = webCreds.client_secret;
+      }
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        throw new Error(
+          '❌ google_creds.json not found!\n\n' +
+          'Please create google_creds.json in the project root with your OAuth credentials.\n' +
+          'Download it from: https://console.cloud.google.com/apis/credentials'
+        );
+      }
+      throw new Error(`❌ Error reading google_creds.json: ${error.message}`);
+    }
+
+    if (!gmailClientId || !gmailClientSecret) {
       throw new Error(
-        '❌ Missing Gmail refresh token!\n\n' +
-        'Set RYANS_GMAIL_REFRESH_TOKEN or GMAIL_REFRESH_TOKEN environment variable\n' +
-        'Run: bun run scripts/get-refresh-token.ts to get your refresh token'
+        '❌ Missing client_id or client_secret in google_creds.json!\n\n' +
+        'Make sure google_creds.json has either "web" or "installed" section with client_id and client_secret.'
       );
     }
 
-    const baseConfig = loadConfig();
+    // Create config from parameters
     const config: ProcessorConfig = {
-      ...baseConfig,
       gmail: {
-        ...baseConfig.gmail,
-        refreshToken: gmailRefreshToken,
+        clientId: gmailClientId,
+        clientSecret: gmailClientSecret,
+        refreshToken: params.gmailRefreshToken,
       },
+      geminiApiKey: params.geminiApiKey,
+      googleSheetsUrl: params.googleSheetsUrl,
+      processedLabel: params.processedLabel || '__auto-processed__',
+      dryRun: params.dryRun || false,
     };
 
     if (config.dryRun) {
       console.log('⚠️  DRY RUN MODE - No labels will be applied\n');
     }
 
-    // Check if we want to test a single email
-    const testMode = process.argv.includes('--test');
+    const query = params.query || 'in:inbox';
+    console.log(`📧 Processing emails for: ${params.emailAddress}`);
+    console.log(`🔍 Search query: ${query}\n`);
+
+    // Initialize Gmail before searching
+    await initializeGmail(config.gmail);
+
+    const emailIds = await searchEmails(query, 1);
     
-    if (testMode) {
-      const query = process.argv[process.argv.indexOf('--test') + 1] || 'in:inbox';
-      console.log(`\n🧪 Test mode: Processing one email matching: ${query}\n`);
-
-      // Initialize Gmail before searching
-      const { initializeGmail } = await import('../lib/gmail');
-      await initializeGmail(config.gmail);
-
-      const emailIds = await searchEmails(query, 1);
-      
-      if (emailIds.length === 0) {
-        console.log('❌ No emails found matching query');
-        return;
-      }
-
-      await processEmail(config, emailIds[0]);
-      console.log('\n✅ Test complete\n');
-    } else {
-      console.log('⚠️  Continuous processing mode not available with stateless function');
-      console.log('Use --test flag to process a single email');
+    if (emailIds.length === 0) {
+      console.log('❌ No emails found matching query');
+      return;
     }
+
+    await processEmail(config, emailIds[0]);
+    console.log('\n✅ Processing complete\n');
   } catch (error: any) {
     console.error('\n❌ Fatal error:', error.message);
-    process.exit(1);
+    throw error;
   }
 }
 
@@ -168,9 +136,8 @@ async function test(): Promise<void> {
     }
       
 
-    // Refresh token still comes from environment
+    // Get required parameters from environment
     const gmailRefreshToken = process.env.RYANS_GMAIL_REFRESH_TOKEN;
-
     if (!gmailRefreshToken) {
       throw new Error(
         '❌ Missing Gmail refresh token!\n\n' +
@@ -179,32 +146,30 @@ async function test(): Promise<void> {
       );
     }
 
-    // Create test config
-    const baseConfig = loadConfig();
-    const config: ProcessorConfig = {
-      ...baseConfig,
-      gmail: {
-        ...baseConfig.gmail,
-        refreshToken: gmailRefreshToken,
-      },
-    };
-
-    console.log(`📧 Testing with email: ryan@fanpierlabs.com\n`);
-
-    // Initialize Gmail before searching
-    const { initializeGmail } = await import('../lib/gmail');
-    await initializeGmail(config.gmail);
-
-    // Search for a test email
-    const emailIds = await searchEmails('in:inbox', 1);
-    
-    if (emailIds.length === 0) {
-      console.log('❌ No emails found in inbox');
-      return;
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!geminiApiKey) {
+      throw new Error(
+        '❌ Missing Gemini API key!\n\n' +
+        'Set GEMINI_API_KEY environment variable\n' +
+        'Get your key from: https://makersuite.google.com/app/apikey'
+      );
     }
 
-    // Process the email using the stateless function
-    await processEmail(config, emailIds[0]);
+    // Get optional parameters
+    const googleSheetsUrl = process.env.GOOGLE_SHEETS_URL || process.env.GOOGLE_SHEETS_ID;
+    const processedLabel = process.env.PROCESSED_LABEL || '__auto-processed__';
+    const dryRun = process.env.DRY_RUN === 'true';
+
+    // Call main with user's parameters
+    await main({
+      emailAddress: 'ryan@fanpierlabs.com',
+      gmailRefreshToken,
+      geminiApiKey,
+      googleSheetsUrl,
+      processedLabel,
+      dryRun,
+      query: 'in:inbox',
+    });
 
     console.log('\n✅ Test complete!\n');
   } catch (error: any) {
@@ -213,15 +178,9 @@ async function test(): Promise<void> {
   }
 }
 
-// Run if called directly
+// Run if called directly - only call test function
 if (require.main === module) {
-  // Check if --test flag is provided for the existing test mode
-  if (process.argv.includes('--test')) {
-    main();
-  } else {
-    // Otherwise run the new test function
-    test();
-  }
+  test();
 }
 
 export { main, test };

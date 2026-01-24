@@ -1,5 +1,4 @@
-import { initializeGemini, applyAILabels } from './lib/ai-labeler';
-import type { Email, LabelRule } from './lib/types';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -28,9 +27,8 @@ function loadEnv() {
 loadEnv();
 
 async function testGeminiIntegration() {
-  console.log('🧪 Testing Gemini Integration\n');
+  console.log('🧪 Testing Gemini API Call\n');
   
-  // Get API key from environment
   const apiKey = process.env.GEMINI_API_KEY;
   
   if (!apiKey) {
@@ -38,77 +36,90 @@ async function testGeminiIntegration() {
     process.exit(1);
   }
   
-  console.log('✅ API Key found in .env');
-  console.log(`   Key prefix: ${apiKey.substring(0, 10)}...\n`);
+  console.log('✅ API Key found\n');
   
   try {
-    // Initialize Gemini
-    console.log('🔧 Initializing Gemini client...');
-    await initializeGemini(apiKey);
-    console.log('✅ Gemini client initialized successfully\n');
-    
-    // Create a test email
-    const testEmail: Email = {
-      id: 'test-1',
-      threadId: 'test-thread-1',
-      from: 'test@example.com',
-      fromAddress: 'test@example.com',
-      fromDomain: 'example.com',
-      to: [],
-      toAddresses: [],
-      toDomains: [],
-      subject: 'Welcome to our newsletter!',
-      body: 'Thank you for subscribing to our newsletter. You can unsubscribe at any time by clicking the link below.',
-      snippet: 'Thank you for subscribing to our newsletter.',
-      receivedDate: new Date(),
-      labels: [],
-    };
-    
-    // Create test rules
-    const testRules: LabelRule[] = [
-      {
-        label: 'Newsletter',
-        prompt: 'Emails that are newsletters or subscription-based content',
-      },
-      {
-        label: 'Promotional',
-        prompt: 'Emails that are promotional or marketing messages',
-      },
-    ];
-    
-    console.log('📧 Test Email:');
-    console.log(`   Subject: ${testEmail.subject}`);
-    console.log(`   From: ${testEmail.from}`);
-    console.log(`   Body: ${testEmail.body.substring(0, 80)}...\n`);
-    
-    console.log('📋 Test Rules:');
-    testRules.forEach((rule, idx) => {
-      console.log(`   ${idx + 1}. ${rule.label}: ${rule.prompt}`);
-    });
-    console.log('');
-    
-    // Test AI labeling
-    console.log('🤖 Testing AI labeling with Gemini...\n');
-    const result = await applyAILabels(testEmail, testRules);
-    
-    console.log('\n📊 Results:');
-    console.log(`   Labels applied: ${result.labels.length}`);
-    if (result.labels.length > 0) {
-      console.log('   Labels:');
-      result.labels.forEach((label) => {
-        console.log(`     - ${label}: ${result.explanations[label] || 'No explanation'}`);
-      });
-    } else {
-      console.log('   No labels matched');
+    // First, try to list available models via REST API
+    console.log('🔍 Checking available models...\n');
+    try {
+      const listResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+      );
+      if (listResponse.ok) {
+        const data = await listResponse.json();
+        if (data.models && data.models.length > 0) {
+          console.log('Available models:');
+          const generateContentModels = data.models
+            .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+            .map((m: any) => m.name.replace('models/', ''));
+          generateContentModels.forEach((name: string) => {
+            console.log(`   - ${name}`);
+          });
+          console.log('');
+        }
+      }
+    } catch (listErr) {
+      console.log('⚠️  Could not list models, will try common names...\n');
     }
     
-    console.log('\n✅ Gemini integration test completed successfully!');
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // Use a model that's actually available (from the list we got)
+    // Try newer models first, then fallback to latest aliases
+    const modelNames = [
+      'gemini-2.0-flash',
+      'gemini-2.5-flash', 
+      'gemini-flash-latest',
+      'gemini-pro-latest'
+    ];
+    let model = null;
+    let modelName = null;
+    
+    console.log('🔍 Trying available models...\n');
+    for (const name of modelNames) {
+      try {
+        model = genAI.getGenerativeModel({ model: name });
+        // Quick test call
+        const testResult = await model.generateContent('test');
+        await testResult.response;
+        modelName = name;
+        console.log(`✅ Using model: ${name}\n`);
+        break;
+      } catch (err) {
+        continue;
+      }
+    }
+    
+    if (!model || !modelName) {
+      throw new Error(
+        `Could not use any of the tried models: ${modelNames.join(', ')}\n` +
+        `Please check the available models list above and update the model name.`
+      );
+    }
+    
+    console.log('📞 Making API call...\n');
+    const result = await model.generateContent('Say "Hello, Gemini is working!" in exactly 5 words.');
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log('✅ API call successful!');
+    console.log(`📝 Response: ${text}\n`);
     
   } catch (error) {
-    console.error('\n❌ Error testing Gemini integration:');
+    console.error('\n❌ Error:');
     if (error instanceof Error) {
-      console.error(`   ${error.message}`);
-      if (error.stack) {
+      const errorMsg = error.message.toLowerCase();
+      if (errorMsg.includes('api key') && (errorMsg.includes('invalid') || errorMsg.includes('not valid'))) {
+        console.error('   Invalid API key detected!\n');
+        console.error('   To get a valid Gemini API key:');
+        console.error('   1. Visit: https://makersuite.google.com/app/apikey');
+        console.error('   2. Sign in with your Google account');
+        console.error('   3. Click "Create API Key"');
+        console.error('   4. Copy the key and update GEMINI_API_KEY in your .env file\n');
+      } else {
+        console.error(`   ${error.message}`);
+      }
+      if (error.stack && !errorMsg.includes('api key')) {
         console.error(`\n   Stack trace:\n${error.stack}`);
       }
     } else {
@@ -118,5 +129,4 @@ async function testGeminiIntegration() {
   }
 }
 
-// Run the test
 testGeminiIntegration();

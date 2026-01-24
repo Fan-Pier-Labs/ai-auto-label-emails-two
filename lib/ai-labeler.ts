@@ -116,7 +116,7 @@ async function matchSingleRuleWithGemini(
   const prompt = buildClassificationPrompt(email, rule);
 
   try {
-    const model = geminiClient.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = geminiClient.getGenerativeModel({ model: 'gemini-2.0-flash' });
     
     const result = await model.generateContent(prompt);
     const response = await result.response;

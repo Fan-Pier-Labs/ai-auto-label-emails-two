@@ -1,0 +1,7 @@
+---
+description: In TS files, imports should be at the top
+globs: *.ts, *.tsx
+alwaysApply: false
+---
+
+When editing TS files, the imports should always be at the top of the file, unless there is a specific reason that the imports need to be inline (for instance there is a circular import and the delayed import avoids issues). This is very rare, and the vast majority of the time imports should be at the top.
