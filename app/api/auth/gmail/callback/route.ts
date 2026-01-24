@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { storeRefreshToken } from '@/lib/token-store';
 
 const STRIPE_CHECKOUT_URL = 'https://buy.stripe.com/aFafZi8IV8wpgd742E5gc07';
 
@@ -101,18 +102,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Store the refresh token (e.g., in database, session, or pass to Stripe)
-    // For now, we'll just redirect to Stripe
-    // You may want to store the token before redirecting
+    // Set credentials to get user info
+    oauth2Client.setCredentials(tokens);
+
+    // Get user's email from Gmail API
+    let userEmail: string | null = null;
+    try {
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      userEmail = profile.data.emailAddress || null;
+      
+      if (userEmail) {
+        // Store refresh token keyed by email
+        storeRefreshToken(userEmail, tokens.refresh_token);
+        console.log(`✅ Stored refresh token for: ${userEmail}`);
+      } else {
+        console.warn('⚠️  Could not get user email from Gmail profile');
+      }
+    } catch (error) {
+      console.error('❌ Error getting user email from Gmail API:', error);
+      // Continue to Stripe anyway - webhook will handle if email is available
+    }
     
-    // Clear the state cookie
+    // Clear the state cookie and redirect to Stripe
     const response = NextResponse.redirect(STRIPE_CHECKOUT_URL);
     response.cookies.delete('oauth_state');
-
-    // Optionally store refresh token in a secure cookie or session
-    // Note: In production, you should store this in a database associated with the user
-    // For now, we'll pass it as a query param to Stripe (not recommended for production)
-    // Better approach: Store in database, associate with Stripe customer ID after payment
     
     return response;
   } catch (error) {

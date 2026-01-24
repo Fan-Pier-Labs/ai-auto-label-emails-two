@@ -12,3 +12,12 @@
 
 - add a few more deterministic rules
 - 
+
+
+
+todo
+
+- interactive demo needs some work (labels on the left should be labels, config box should be wider, trash can instead of x)
+- want to surface the deterministic rules as well to the fe 
+
+
