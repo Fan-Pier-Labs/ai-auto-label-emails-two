@@ -15,6 +15,10 @@
 
 
 
+- add a dterministic rule that checks to see if the domain is recently registered. 
+
+
+
 todo
 
 - interactive demo needs some work (labels on the left should be labels, config box should be wider, trash can instead of x)
