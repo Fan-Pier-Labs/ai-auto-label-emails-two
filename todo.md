@@ -33,3 +33,7 @@ infra
 
 - [ ] add health check endpoint, add that to docker
 - [ ] add retry logic to fe, and to api calls from the be to gemini, etc
+
+
+# dreams
+- [ ] add a ai rule to process individual events that i have been invited to, and have an ai prompt to determine whether i should register for the event or not.
