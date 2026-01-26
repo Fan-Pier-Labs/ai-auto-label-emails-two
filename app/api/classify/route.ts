@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeGemini, applyAILabels } from '@/lib/ai-labeler';
-import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limit';
+import { checkCombinedRateLimit } from '@/lib/rate-limit';
 import type { Email, ClassifyEmailRequest, ClassifyEmailResponse } from '@/lib/types';
 
 
 export async function POST(request: NextRequest) {
   try {
-    // Check rate limit
-    const clientId = getClientIdentifier(request);
-    const rateLimit = checkRateLimit(clientId, { maxRequests: 20, windowMs: 60000 });
+    // Check rate limit (100 requests per day for both IP and cookie)
+    const rateLimit = checkCombinedRateLimit(request, { 
+      maxRequests: 100, 
+      windowMs: 24 * 60 * 60 * 1000 // 24 hours
+    });
     
     if (!rateLimit.allowed) {
       return NextResponse.json(
@@ -16,9 +18,10 @@ export async function POST(request: NextRequest) {
         { 
           status: 429,
           headers: {
-            'X-RateLimit-Limit': '20',
+            'X-RateLimit-Limit': '100',
             'X-RateLimit-Remaining': '0',
             'X-RateLimit-Reset': new Date(rateLimit.resetAt).toISOString(),
+            'X-RateLimit-Identifier': rateLimit.identifier,
           }
         }
       );
@@ -80,9 +83,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, {
       headers: {
-        'X-RateLimit-Limit': '20',
+        'X-RateLimit-Limit': '100',
         'X-RateLimit-Remaining': rateLimit.remaining.toString(),
         'X-RateLimit-Reset': new Date(rateLimit.resetAt).toISOString(),
+        'X-RateLimit-Identifier': rateLimit.identifier,
       }
     });
   } catch (error) {
