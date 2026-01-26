@@ -17,6 +17,8 @@
 
 - add a dterministic rule that checks to see if the domain is recently registered. 
 
+- add a dterministic check to see if the domain resolves, and has gmail/etc as the mail provider
+
 
 
 todo
