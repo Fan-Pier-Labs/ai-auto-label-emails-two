@@ -14,8 +14,9 @@
     "get-token": "bun run scripts/get-refresh-token.ts",
     "process-emails": "bun run scripts/run-processor.ts",
     "test-email": "bun run scripts/run-processor.ts --test",
-    "start-background": "./start-background.sh",
-    "test": "bun test"
+    "test": "bun test",
+    "deploy": "python3 ./node_modules/deploy/main.py --config deploy.yaml"
+
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.975.0",
@@ -78,6 +79,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "deploy": "https://github.com/fan-Pier-Labs/deploy",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
