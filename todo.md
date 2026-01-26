@@ -6,8 +6,6 @@
 - [ ] add sentry
 
 
-
-
 deterministic rules 
 
 - [ ] add a deterministic rule that checks to see if the domain is recently registered. (can we have a rule that takes in a parameter?)
@@ -25,7 +23,7 @@ deterministic rules
 todo
 
 - [ ] interactive demo needs some work (labels on the left should be labels, config box should be wider, trash can instead of x)
-- [ ] want to surface the deterministic rules as well to the fe 
+- [ ] want to surface the deterministic rules as well to the fe. this can be another section below the ai rules demo portion.
 - [ ] add some more test emails. also add some buttons to add even more test emails we can have a ~wild~ one too. 
 - [ ] remove the "no database needed" cell. do something else. or just have 3 cells
 - [ ] update the github link
