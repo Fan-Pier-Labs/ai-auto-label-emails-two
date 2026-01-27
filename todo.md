@@ -3,7 +3,7 @@
 - [ ] add a stripe integration
 - [ ] store the google sheet id and gmail refresh token in stripe
 - [ ] add analytics: just log. just keep track of usage, dont log email contents. eg log (processed 3 emails for user with name X Y and email X@Y.com )
-- [ ] add sentry
+- [ ] add sentry and rollbar
 
 
 deterministic rules 
