@@ -2,16 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { retrieveRefreshToken } from '@/lib/token-store';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-12-15.clover',
-});
-
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+// Lazy initialization to avoid issues during build time
+function getStripe(): Stripe {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY is not set');
+  }
+  return new Stripe(secretKey, {
+    apiVersion: '2025-12-15.clover',
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text();
     const signature = request.headers.get('stripe-signature');
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
     if (!signature || !webhookSecret) {
       console.error('Missing Stripe signature or webhook secret');
@@ -20,6 +26,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    const stripe = getStripe();
 
     // Verify webhook signature
     let event: Stripe.Event;
@@ -41,7 +49,7 @@ export async function POST(request: NextRequest) {
       const customerEmail = session.customer_email || 
         (typeof session.customer === 'string' 
           ? null 
-          : session.customer?.email) ||
+          : (session.customer && 'email' in session.customer ? session.customer.email : null)) ||
         session.customer_details?.email;
 
       if (!customerEmail) {
