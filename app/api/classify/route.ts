@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { initializeGemini, applyAILabels } from '@/lib/ai-labeler';
-import { checkCombinedRateLimit } from '@/lib/rate-limit';
+import { checkCombinedRateLimit, checkGlobalDailyRateLimit } from '@/lib/rate-limit';
 import type { Email, ClassifyEmailRequest, ClassifyEmailResponse } from '@/lib/types';
 
 
 export async function POST(request: NextRequest) {
   try {
-    // Check rate limit (100 requests per day for both IP and cookie)
+    // Check global daily rate limit (1000 requests per day across all users)
+    // Don't increment yet - we'll increment after all checks pass
+    const globalRateLimit = checkGlobalDailyRateLimit(1000, 24 * 60 * 60 * 1000, false);
+    
+    if (!globalRateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Daily request limit exceeded. Please try again tomorrow.' },
+        { 
+          status: 429
+        }
+      );
+    }
+
+    // Check per-user rate limit (100 requests per day for both IP and cookie)
     const rateLimit = checkCombinedRateLimit(request, { 
       maxRequests: 100, 
       windowMs: 24 * 60 * 60 * 1000 // 24 hours
@@ -27,12 +40,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // All checks passed - now increment global counter
+    const globalRateLimitFinal = checkGlobalDailyRateLimit(1000, 24 * 60 * 60 * 1000, true);
+
     const body = await request.json() as ClassifyEmailRequest;
     const { email, rules } = body;
 
     if (!email || !email.subject || !email.body) {
       return NextResponse.json(
         { error: 'Email subject and body are required' },
+        { status: 400 }
+      );
+    }
+
+    // Check character limit (1000 chars for subject + body combined)
+    const queryLength = (email.subject || '').length + (email.body || '').length;
+    if (queryLength > 1000) {
+      return NextResponse.json(
+        { 
+          error: 'Query too long. Email subject and body combined must be 1000 characters or less.',
+          queryLength,
+          maxLength: 1000
+        },
         { status: 400 }
       );
     }

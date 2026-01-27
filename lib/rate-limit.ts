@@ -7,6 +7,10 @@ interface RateLimitEntry {
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
+// Global daily rate limit (across all users)
+let globalDailyCount = 0;
+let globalDailyResetAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours from now
+
 // Clean up old entries every 10 minutes
 setInterval(() => {
   const now = Date.now();
@@ -14,6 +18,12 @@ setInterval(() => {
     if (now > entry.resetAt) {
       rateLimitStore.delete(key);
     }
+  }
+  
+  // Reset global daily counter if window expired
+  if (now > globalDailyResetAt) {
+    globalDailyCount = 0;
+    globalDailyResetAt = now + (24 * 60 * 60 * 1000);
   }
 }, 10 * 60 * 1000);
 
@@ -33,6 +43,12 @@ export interface CombinedRateLimitResult {
   remaining: number;
   resetAt: number;
   identifier: string;
+}
+
+export interface GlobalRateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetAt: number;
 }
 
 /**
@@ -131,5 +147,46 @@ export function checkCombinedRateLimit(
   return {
     ...cookieLimit,
     identifier: 'cookie',
+  };
+}
+
+/**
+ * Check global daily rate limit (across all users)
+ * This prevents excessive AI credit usage
+ * @param maxRequests Maximum requests allowed per day (default: 1000)
+ * @param windowMs Time window in milliseconds (default: 24 hours)
+ * @param increment If true, increment the counter (default: true)
+ */
+export function checkGlobalDailyRateLimit(
+  maxRequests: number = 1000,
+  windowMs: number = 24 * 60 * 60 * 1000, // 24 hours
+  increment: boolean = true
+): GlobalRateLimitResult {
+  const now = Date.now();
+  
+  // Reset if window expired
+  if (now > globalDailyResetAt) {
+    globalDailyCount = 0;
+    globalDailyResetAt = now + windowMs;
+  }
+  
+  // Check if limit exceeded
+  if (globalDailyCount >= maxRequests) {
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: globalDailyResetAt,
+    };
+  }
+  
+  // Increment count only if requested
+  if (increment) {
+    globalDailyCount++;
+  }
+  
+  return {
+    allowed: true,
+    remaining: maxRequests - (increment ? globalDailyCount : globalDailyCount + 1),
+    resetAt: globalDailyResetAt,
   };
 }
