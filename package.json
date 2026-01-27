@@ -14,7 +14,9 @@
     "get-token": "bun run scripts/get-refresh-token.ts",
     "process-emails": "bun run scripts/run-processor.ts",
     "test-email": "bun run scripts/run-processor.ts --test",
-    "test": "bun test",
+    "test": "bun test --ignore '**/*.network.test.ts'",
+    "test:network": "bun test '**/*.network.test.ts'",
+    "test:all": "bun test",
     "deploy": "bun run build; python3 ./node_modules/deploy/main.py --config deploy.yaml"
   },
   "dependencies": {
