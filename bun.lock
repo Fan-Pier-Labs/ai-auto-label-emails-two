@@ -530,7 +530,7 @@
 
     "decimal.js-light": ["decimal.js-light@2.5.1", "", {}, "sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg=="],
 
-    "deploy": ["deploy@github:fan-Pier-Labs/deploy#6248076", {}, "Fan-Pier-Labs-deploy-6248076"],
+    "deploy": ["deploy@github:fan-Pier-Labs/deploy#0e9703b", {}, "Fan-Pier-Labs-deploy-0e9703b"],
 
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
 
