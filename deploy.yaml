@@ -5,6 +5,7 @@ aws:
   region: "us-east-2"
 public:
   domain: "ai-email-labels.fanpierlabs.com"
+  mode: "production"
 
 task:
   cpu: 1024
