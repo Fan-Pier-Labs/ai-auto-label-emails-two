@@ -14,8 +14,8 @@
     "get-token": "bun run scripts/get-refresh-token.ts",
     "process-emails": "bun run scripts/run-processor.ts",
     "test-email": "bun run scripts/run-processor.ts --test",
-    "test": "bun test lib/utils.test.ts lib/sheets.test.ts lib/rate-limit.test.ts lib/deterministic.test.ts lib/ai-labeler.test.ts",
-    "test:network": "bun test lib/deterministic.network.test.ts",
+    "test": "bun test $(find lib -name '*.test.ts' ! -name '*.network.test.ts')",
+    "test:network": "bun test $(find . -name '*.network.test.ts')",
     "test:all": "bun test",
     "deploy": "bun run build; python3 ./node_modules/deploy/main.py --config deploy.yaml"
   },
