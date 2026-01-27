@@ -1,4 +1,4 @@
-
+# todo list 
 
 - [ ] add a stripe integration
 - [ ] store the google sheet id and gmail refresh token in stripe
