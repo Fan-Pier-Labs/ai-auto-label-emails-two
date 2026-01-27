@@ -84,6 +84,9 @@ else
     echo "Warning: curl not available, skipping GitHub CLI installation"
 fi
 
+# Install Python dependencies
+pip3 install --no-cache-dir pyyaml boto3 --break-system-packages
+
 # Set fish as default shell
 echo "Setting fish as default shell..."
 if command -v fish &> /dev/null; then
