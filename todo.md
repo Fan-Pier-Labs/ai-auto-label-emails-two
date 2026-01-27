@@ -9,7 +9,7 @@
 deterministic rules 
 
 - [x] add a deterministic rule that checks to see if the domain is registred in the last 3 months. if so call the label new-domain
-- [x] add a deterministic check to see if the domain resolves, and has gmail/etc as the mail provider
+- [?] add a deterministic check to see if the domain resolves, and has gmail/etc as the mail provider
 - [ ] we need to support enabling/disabling these in google sheets
 
 (can we have a rule that takes in a parameter?)
