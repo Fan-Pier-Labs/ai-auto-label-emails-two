@@ -84,6 +84,29 @@ else
     echo "Warning: curl not available, skipping GitHub CLI installation"
 fi
 
+# Install Docker CLI (for Docker-in-Docker support)
+if command -v curl &> /dev/null; then
+    echo "Installing Docker CLI..."
+    ARCH=$(dpkg --print-architecture)
+    if [ "$ARCH" = "amd64" ]; then
+        DOCKER_ARCH="x86_64"
+    elif [ "$ARCH" = "arm64" ]; then
+        DOCKER_ARCH="aarch64"
+    else
+        echo "Unsupported architecture: $ARCH, skipping Docker CLI"
+        DOCKER_ARCH=""
+    fi
+    
+    if [ -n "$DOCKER_ARCH" ]; then
+        DOCKER_VERSION="25.0.5"
+        curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-${DOCKER_VERSION}.tgz" -o docker.tgz && \
+        tar -xzf docker.tgz && \
+        mv docker/docker /usr/local/bin/ && \
+        chmod +x /usr/local/bin/docker && \
+        rm -rf docker docker.tgz || echo "Docker CLI installation failed, continuing..."
+    fi
+fi
+
 # Install Python dependencies
 pip3 install --no-cache-dir pyyaml boto3 --break-system-packages
 
