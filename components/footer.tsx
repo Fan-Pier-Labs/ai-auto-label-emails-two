@@ -34,7 +34,7 @@ export function Footer() {
 
           <div className="flex items-center gap-4">
             <Link 
-              href="https://github.com/fanpierlabs/auto-label-emails" 
+              href="https://github.com/Fan-Pier-Labs/ai-auto-label-emails-two" 
               target="_blank"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >

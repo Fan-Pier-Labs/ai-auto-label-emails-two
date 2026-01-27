@@ -49,7 +49,7 @@ export function Options() {
             <div className="border-t border-border pt-6">
               <p className="mb-4 text-3xl font-bold text-foreground">Free</p>
               <Button asChild variant="outline" className="w-full bg-transparent">
-                <Link href="https://github.com/fanpierlabs/auto-label-emails" target="_blank">
+                <Link href="https://github.com/Fan-Pier-Labs/ai-auto-label-emails-two" target="_blank">
                   View Documentation
                 </Link>
               </Button>

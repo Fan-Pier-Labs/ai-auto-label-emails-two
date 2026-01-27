@@ -8,9 +8,11 @@
 
 deterministic rules 
 
-- [ ] add a deterministic rule that checks to see if the domain is recently registered. (can we have a rule that takes in a parameter?)
-- [ ] add a deterministic check to see if the domain resolves, and has gmail/etc as the mail provider
+- [x] add a deterministic rule that checks to see if the domain is registred in the last 3 months. if so call the label new-domain
+- [x] add a deterministic check to see if the domain resolves, and has gmail/etc as the mail provider
 - [ ] we need to support enabling/disabling these in google sheets
+
+(can we have a rule that takes in a parameter?)
 
 
 - [ ] add a deterministic check to see if the domain that the email comes from is valid. do this by making a simple http get to it. if it fails, label the email as domain-down. if it redirects to a different domain (not just a different subdomain, but a different domain) then mark the email as domain-redirects. these should be two separate deterministic email rules. 
@@ -26,7 +28,7 @@ todo
 - [ ] want to surface the deterministic rules as well to the fe. this can be another section below the ai rules demo portion.
 - [ ] add some more test emails. also add a button to add even more test emails these emails can be hardcoded in the frontend, and just added when the user clicks the add button. Also, add another button that says "Add ~wild~ emails" and we can have it add a bunch of hilarious emails
 - [ ] remove the "no database needed" cell. do something else. or just have 3 cells
-- [ ] update the github link
+- [x] update the github link
 
 
 infra 

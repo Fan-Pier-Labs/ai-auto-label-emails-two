@@ -6,6 +6,8 @@ import {
   hasSentToAddress,
 } from './gmail';
 import { promises as dns } from 'dns';
+import { lookup as whoisLookup } from 'whois';
+import { createConnection } from 'net';
 
 /**
  * Extract the base domain from a domain string (e.g., "mail.example.com" -> "example.com")
@@ -206,6 +208,251 @@ async function checkDomainStatus(domain: string): Promise<{
 }
 
 /**
+ * Check if a domain is registered in the last N months
+ * Returns { isNewDomain: boolean, registrationDate: Date | null }
+ */
+/**
+ * Get WHOIS server for a specific TLD
+ * Returns the WHOIS server hostname or null if unknown
+ */
+function getWhoisServerForTld(tld: string): string | null {
+  const tldLower = tld.toLowerCase();
+  
+  // Map of TLDs to their WHOIS servers
+  const tldServers: Record<string, string> = {
+    'help': 'whois.nic.help',
+    // Add more TLDs as needed
+  };
+  
+  return tldServers[tldLower] || null;
+}
+
+/**
+ * Query WHOIS server directly via TCP connection
+ * This is used as a fallback when the whois package doesn't support a TLD
+ */
+async function queryWhoisDirectly(domain: string, server: string): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    const socket = createConnection(43, server);
+    let data = '';
+    let timeout: NodeJS.Timeout;
+    
+    // Set timeout
+    timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error('WHOIS query timeout'));
+    }, 10000); // 10 second timeout
+    
+    socket.on('connect', () => {
+      // Send WHOIS query
+      socket.write(`${domain}\r\n`);
+    });
+    
+    socket.on('data', (chunk: Buffer) => {
+      data += chunk.toString();
+    });
+    
+    socket.on('end', () => {
+      clearTimeout(timeout);
+      resolve(data);
+    });
+    
+    socket.on('error', (err: Error) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
+}
+
+export async function checkDomainRegistrationDate(domain: string, months: number = 3): Promise<{
+  isNewDomain: boolean;
+  registrationDate: Date | null;
+}> {
+  try {
+    const baseDomain = getBaseDomain(domain);
+    const tld = baseDomain.split('.').pop() || '';
+    
+    // Get WHOIS server for this TLD if known
+    const whoisServer = getWhoisServerForTld(tld);
+    
+    let whoisData: string = '';
+    
+    // Try direct WHOIS lookup first
+    try {
+      whoisData = await new Promise<string>((resolve, reject) => {
+        const options = whoisServer ? { server: whoisServer } : {};
+        whoisLookup(baseDomain, options, (err: Error | null, data: string | any) => {
+          if (err) {
+            reject(err);
+          } else {
+            // Handle both string and array responses
+            const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
+            resolve(dataStr);
+          }
+        });
+      });
+    } catch (whoisError: any) {
+      // If direct WHOIS fails (e.g., TLD not supported), try direct TCP connection
+      // This is especially useful for newer TLDs like .help
+      if (tld === 'help' || whoisError.message?.includes('no whois server')) {
+        if (whoisServer) {
+          try {
+            const directData = await queryWhoisDirectly(baseDomain, whoisServer);
+            if (directData) {
+              whoisData = directData;
+            } else {
+              // Direct connection failed
+              return {
+                isNewDomain: false,
+                registrationDate: null,
+              };
+            }
+          } catch (directError: any) {
+            // Direct connection also failed
+            return {
+              isNewDomain: false,
+              registrationDate: null,
+            };
+          }
+        } else {
+          // No WHOIS server configured for this TLD
+          return {
+            isNewDomain: false,
+            registrationDate: null,
+          };
+        }
+      } else {
+        // Re-throw if it's not a TLD support issue
+        throw whoisError;
+      }
+    }
+
+    // Parse registration date from WHOIS data
+    // Common patterns: "Creation Date:", "Registered on:", "created:", "Registration Date:"
+    const whoisLower = whoisData.toLowerCase();
+    let registrationDate: Date | null = null;
+
+    // Try to find creation/registration date
+    // Add more flexible patterns including various date formats and field names
+    const datePatterns = [
+      // ISO format dates (YYYY-MM-DD)
+      /(?:creation|created|registration|registered|domain created|domain registration)[\s:]+date[\s:]*(\d{4}-\d{2}-\d{2})/i,
+      /(?:creation|created|registration|registered)[\s:]+on[\s:]*(\d{4}-\d{2}-\d{2})/i,
+      /(?:creation|created|registration|registered)[\s:]+(\d{4}-\d{2}-\d{2})/i,
+      // US format (MM/DD/YYYY)
+      /(?:creation|created|registration|registered|domain created|domain registration)[\s:]+date[\s:]*(\d{1,2}\/\d{1,2}\/\d{4})/i,
+      /(?:creation|created|registration|registered)[\s:]+on[\s:]*(\d{1,2}\/\d{1,2}\/\d{4})/i,
+      // European format (DD-MM-YYYY)
+      /(?:creation|created|registration|registered|domain created|domain registration)[\s:]+date[\s:]*(\d{1,2}-\d{1,2}-\d{4})/i,
+      /(?:creation|created|registration|registered)[\s:]+on[\s:]*(\d{1,2}-\d{1,2}-\d{4})/i,
+      // Generic date patterns
+      /(?:creation|created|registration|registered)[\s:]+date[\s:]*(\d{4}\.\d{2}\.\d{2})/i,
+      // Try to match any date-like pattern near "created" or "registration"
+      /created[^:]*:[\s]*([A-Za-z]{3}\s+\d{1,2},?\s+\d{4})/i,
+      /registration[^:]*:[\s]*([A-Za-z]{3}\s+\d{1,2},?\s+\d{4})/i,
+    ];
+
+    for (const pattern of datePatterns) {
+      const match = whoisData.match(pattern);
+      if (match && match[1]) {
+        try {
+          const dateStr = match[1].trim();
+          registrationDate = new Date(dateStr);
+          // Validate the date is reasonable (not too far in past/future)
+          const minDate = new Date('1990-01-01');
+          const maxDate = new Date();
+          maxDate.setFullYear(maxDate.getFullYear() + 1); // Allow 1 year in future for edge cases
+          
+          if (!isNaN(registrationDate.getTime()) && 
+              registrationDate >= minDate && 
+              registrationDate <= maxDate) {
+            break;
+          } else {
+            registrationDate = null; // Reset if invalid
+          }
+        } catch (e) {
+          // Continue to next pattern
+          registrationDate = null;
+        }
+      }
+    }
+
+    if (!registrationDate || isNaN(registrationDate.getTime())) {
+      return {
+        isNewDomain: false,
+        registrationDate: null,
+      };
+    }
+
+    // Check if registration date is within the last N months
+    const now = new Date();
+    const monthsAgo = new Date();
+    monthsAgo.setMonth(now.getMonth() - months);
+
+    const isNewDomain = registrationDate >= monthsAgo;
+
+    return {
+      isNewDomain,
+      registrationDate,
+    };
+  } catch (error: any) {
+    // If WHOIS lookup fails, we can't determine if it's a new domain
+    return {
+      isNewDomain: false,
+      registrationDate: null,
+    };
+  }
+}
+
+/**
+ * Check if domain resolves and has gmail/etc as mail provider
+ * Returns { resolves: boolean, hasKnownMailProvider: boolean, provider: string | null }
+ */
+async function checkDomainResolvesWithMailProvider(domain: string): Promise<{
+  resolves: boolean;
+  hasKnownMailProvider: boolean;
+  provider: string | null;
+}> {
+  try {
+    const baseDomain = getBaseDomain(domain);
+    
+    // Check if domain resolves (try A record first, then AAAA)
+    let resolves = false;
+    try {
+      await dns.resolve4(baseDomain);
+      resolves = true;
+    } catch (e) {
+      try {
+        await dns.resolve6(baseDomain);
+        resolves = true;
+      } catch (e2) {
+        resolves = false;
+      }
+    }
+
+    // Check MX records to determine mail provider
+    const mxRecords = await lookupMX(baseDomain);
+    const provider = categorizeSMTPProvider(mxRecords);
+
+    // Known mail providers are: gmail, msft, automation, work-email
+    // We exclude 'other' and null as they're not "known" providers
+    const hasKnownMailProvider = provider !== null && provider !== 'other';
+
+    return {
+      resolves,
+      hasKnownMailProvider,
+      provider,
+    };
+  } catch (error: any) {
+    return {
+      resolves: false,
+      hasKnownMailProvider: false,
+      provider: null,
+    };
+  }
+}
+
+/**
  * Apply deterministic labels using Gmail search (no history needed)
  * Returns both matched labels and all rule results
  */
@@ -364,6 +611,66 @@ export async function applyDeterministicLabels(
     }
   }
 
+  // Check if domain is registered in the last 3 months (new-domain)
+  if (email.fromDomain) {
+    try {
+      const domainRegCheck = await checkDomainRegistrationDate(email.fromDomain, 3);
+      if (domainRegCheck.isNewDomain && domainRegCheck.registrationDate) {
+        labels.push('new-domain');
+        results.push({
+          ruleName: 'new-domain',
+          matched: true,
+          reason: `Domain ${email.fromDomain} was registered on ${domainRegCheck.registrationDate.toISOString().split('T')[0]} (within last 3 months)`,
+        });
+      } else {
+        results.push({
+          ruleName: 'new-domain',
+          matched: false,
+          reason: domainRegCheck.registrationDate
+            ? `Domain ${email.fromDomain} was registered on ${domainRegCheck.registrationDate.toISOString().split('T')[0]} (more than 3 months ago)`
+            : `Could not determine registration date for domain ${email.fromDomain}`,
+        });
+      }
+    } catch (error: any) {
+      results.push({
+        ruleName: 'new-domain',
+        matched: false,
+        reason: `Failed to check registration date for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
+      });
+    }
+  }
+
+  // Check if domain resolves and has gmail/etc as mail provider
+  if (email.fromDomain) {
+    try {
+      const domainResolveCheck = await checkDomainResolvesWithMailProvider(email.fromDomain);
+      if (domainResolveCheck.resolves && domainResolveCheck.hasKnownMailProvider) {
+        labels.push('domain-resolves-known-provider');
+        results.push({
+          ruleName: 'domain-resolves-known-provider',
+          matched: true,
+          reason: `Domain ${email.fromDomain} resolves and uses known mail provider: ${domainResolveCheck.provider || 'unknown'}`,
+        });
+      } else {
+        results.push({
+          ruleName: 'domain-resolves-known-provider',
+          matched: false,
+          reason: !domainResolveCheck.resolves
+            ? `Domain ${email.fromDomain} does not resolve (DNS lookup failed)`
+            : !domainResolveCheck.hasKnownMailProvider
+            ? `Domain ${email.fromDomain} resolves but does not use a known mail provider (gmail/msft/automation/work-email)`
+            : `Domain ${email.fromDomain} check failed`,
+        });
+      }
+    } catch (error: any) {
+      results.push({
+        ruleName: 'domain-resolves-known-provider',
+        matched: false,
+        reason: `Failed to check domain resolution and mail provider for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
+      });
+    }
+  }
+
   // Check SMTP provider based on MX lookup
   if (email.fromDomain) {
     try {
@@ -482,4 +789,9 @@ export async function applyDeterministicLabels(
   }
 
   return { labels, results };
+}
+
+
+if (require.main === module) {
+  // here 
 }
