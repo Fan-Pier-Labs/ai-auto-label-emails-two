@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, X, Sparkles } from "lucide-react"
+import { Loader2, Trash2, Sparkles } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Table,
@@ -317,7 +317,7 @@ export function InteractiveDemo() {
           </p>
         </div>
 
-        <div className="grid gap-8" style={{ gridTemplateColumns: '40% 60%' }}>
+        <div className="grid gap-8" style={{ gridTemplateColumns: '50% 50%' }}>
           {/* Left Side - Labels Table */}
           <div>
             <Card className="p-6 h-full">
@@ -371,7 +371,7 @@ export function InteractiveDemo() {
                               onClick={() => removeRule(rule.id)}
                               className="h-8 w-8 p-0"
                             >
-                              <X className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           ) : null}
                         </TableCell>
