@@ -4,7 +4,7 @@
 - [ ] get the gmail oauth integration working and get approval from google so external users can use it.
 - [ ] store the google sheet id and gmail refresh token in stripe
 - [ ] add analytics: just log. just keep track of usage, dont log email contents. eg log (processed 3 emails for user with name X Y and email X@Y.com ). we will run this on fargate so you can just use console.log and it will go to cloudwatch logs.
-- [ ] add sentry. enable the session recording and error tracking and log tracking. 
+- [x] add sentry. enable the session recording and error tracking and log tracking. 
 
 
 deterministic rules 
@@ -28,14 +28,14 @@ todo
 - [ ] interactive demo needs some work (labels on the left should be labels, config box should be wider, trash can instead of x)
 - [ ] want to surface the deterministic rules as well to the fe. this can be another section below the ai rules demo portion.
 - [ ] add some more test emails. also add a button to add even more test emails these emails can be hardcoded in the frontend, and just added when the user clicks the add button. Also, add another button that says "Add ~wild~ emails" and we can have it add a bunch of hilarious emails
-- [ ] remove the "no database needed" cell. do something else. or just have 3 cells
+- [x] remove the "no database needed" cell. do something else. or just have 3 cells
 - [x] update the github link
 
 
 infra 
 
-- [ ] add health check endpoint, add that to docker
-- [ ] add retry logic to fe, and to api calls from the be to gemini, etc
+- [x] add health check endpoint, add that to docker
+- [x] add retry logic to fe, and to api calls from the be to gemini, etc
 
 
 # dreams
