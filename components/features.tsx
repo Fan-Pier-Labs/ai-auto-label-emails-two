@@ -1,4 +1,4 @@
-import { Brain, Tag, Zap, Database } from "lucide-react"
+import { Brain, Tag, Zap } from "lucide-react"
 
 const features = [
   {
@@ -15,11 +15,6 @@ const features = [
     icon: Zap,
     title: "Works Automatically",
     description: "Runs continuously in the background, processing your emails without any manual intervention."
-  },
-  {
-    icon: Database,
-    title: "No Database Needed",
-    description: "Completely stateless design—all tracking is done via Gmail labels, keeping things simple."
   }
 ]
 
@@ -36,7 +31,7 @@ export function Features() {
           </p>
         </div>
 
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <div 
               key={feature.title}
