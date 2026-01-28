@@ -2,6 +2,7 @@
 import { processEmail } from '../lib/processor';
 import type { ProcessorConfig } from '../lib/processor';
 import { searchEmails, initializeGmail } from '../lib/gmail';
+import { analytics } from '../lib/analytics';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { config } from 'dotenv';
@@ -138,7 +139,12 @@ async function main(params: MainParams): Promise<void> {
         processedEmailIds.add(emailId);
       }
     }
-    
+
+    analytics.track('emails_processed', {
+      count: emailIds.length,
+      userEmail: params.emailAddress,
+    });
+
     console.log('\n✅ Processing complete\n');
   } catch (error: any) {
     console.error('\n❌ Fatal error:', error.message);
