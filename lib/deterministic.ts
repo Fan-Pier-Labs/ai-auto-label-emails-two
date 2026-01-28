@@ -405,6 +405,101 @@ export async function checkDomainRegistrationDate(domain: string, months: number
 }
 
 /**
+ * Perform TXT lookup for a domain
+ * Returns array of TXT records or null if lookup fails
+ */
+async function lookupTXT(domain: string): Promise<string[] | null> {
+  try {
+    const txtRecords = await dns.resolveTxt(domain);
+    // TXT records come as arrays of strings (chunked), join them
+    return txtRecords.map(record => record.join(''));
+  } catch (error: any) {
+    // DNS lookup failed - domain might not have TXT records or doesn't exist
+    return null;
+  }
+}
+
+/**
+ * Check domain TXT records for security-related records
+ * Returns { hasTXT: boolean, hasSPF: boolean, hasDMARC: boolean, hasDKIM: boolean }
+ */
+async function checkDomainTXTRecords(domain: string): Promise<{
+  hasTXT: boolean;
+  hasSPF: boolean;
+  hasDMARC: boolean;
+  hasDKIM: boolean;
+  txtRecords: string[] | null;
+}> {
+  try {
+    const baseDomain = getBaseDomain(domain);
+    
+    // Get TXT records for the base domain
+    const txtRecords = await lookupTXT(baseDomain);
+    
+    if (!txtRecords || txtRecords.length === 0) {
+      return {
+        hasTXT: false,
+        hasSPF: false,
+        hasDMARC: false,
+        hasDKIM: false,
+        txtRecords: null,
+      };
+    }
+
+    // Check for SPF record (starts with "v=spf1")
+    const hasSPF = txtRecords.some(record => 
+      record.toLowerCase().startsWith('v=spf1')
+    );
+
+    // Check for DMARC record (need to query _dmarc subdomain)
+    let hasDMARC = false;
+    try {
+      const dmarcRecords = await lookupTXT(`_dmarc.${baseDomain}`);
+      hasDMARC = dmarcRecords !== null && dmarcRecords.some(record =>
+        record.toLowerCase().startsWith('v=dmarc1')
+      );
+    } catch (e) {
+      // DMARC lookup failed, that's okay
+      hasDMARC = false;
+    }
+
+    // Check for DKIM - this is tricky as DKIM selectors vary
+    // We'll check for common selectors
+    let hasDKIM = false;
+    const commonDkimSelectors = ['default', 'google', 'selector1', 'selector2', 'k1', 'dkim'];
+    for (const selector of commonDkimSelectors) {
+      try {
+        const dkimRecords = await lookupTXT(`${selector}._domainkey.${baseDomain}`);
+        if (dkimRecords !== null && dkimRecords.some(record =>
+          record.toLowerCase().includes('v=dkim1') || record.toLowerCase().includes('k=rsa')
+        )) {
+          hasDKIM = true;
+          break;
+        }
+      } catch (e) {
+        // DKIM lookup failed for this selector, try next
+      }
+    }
+
+    return {
+      hasTXT: true,
+      hasSPF,
+      hasDMARC,
+      hasDKIM,
+      txtRecords,
+    };
+  } catch (error: any) {
+    return {
+      hasTXT: false,
+      hasSPF: false,
+      hasDMARC: false,
+      hasDKIM: false,
+      txtRecords: null,
+    };
+  }
+}
+
+/**
  * Check if domain resolves and has gmail/etc as mail provider
  * Returns { resolves: boolean, hasKnownMailProvider: boolean, provider: string | null }
  */
@@ -784,6 +879,99 @@ export async function applyDeterministicLabels(
         ruleName: 'smtp-other',
         matched: false,
         reason: `MX lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
+      });
+    }
+  }
+
+  // Check TXT DNS records (SPF, DMARC, DKIM)
+  if (email.fromDomain) {
+    try {
+      const txtCheck = await checkDomainTXTRecords(email.fromDomain);
+
+      // Rule: no-spf - Domain lacks SPF record (potential spam/phishing indicator)
+      if (!txtCheck.hasSPF) {
+        labels.push('no-spf');
+        results.push({
+          ruleName: 'no-spf',
+          matched: true,
+          reason: `Domain ${email.fromDomain} does not have an SPF record configured`,
+        });
+      } else {
+        results.push({
+          ruleName: 'no-spf',
+          matched: false,
+          reason: `Domain ${email.fromDomain} has SPF record configured`,
+        });
+      }
+
+      // Rule: no-dmarc - Domain lacks DMARC record (potential spam/phishing indicator)
+      if (!txtCheck.hasDMARC) {
+        labels.push('no-dmarc');
+        results.push({
+          ruleName: 'no-dmarc',
+          matched: true,
+          reason: `Domain ${email.fromDomain} does not have a DMARC record configured`,
+        });
+      } else {
+        results.push({
+          ruleName: 'no-dmarc',
+          matched: false,
+          reason: `Domain ${email.fromDomain} has DMARC record configured`,
+        });
+      }
+
+      // Rule: has-dkim - Domain has DKIM configured (good security practice)
+      if (txtCheck.hasDKIM) {
+        labels.push('has-dkim');
+        results.push({
+          ruleName: 'has-dkim',
+          matched: true,
+          reason: `Domain ${email.fromDomain} has DKIM record configured`,
+        });
+      } else {
+        results.push({
+          ruleName: 'has-dkim',
+          matched: false,
+          reason: `Domain ${email.fromDomain} does not have a detectable DKIM record (checked common selectors)`,
+        });
+      }
+
+      // Rule: no-txt - Domain has no TXT records at all (unusual for legitimate domains)
+      if (!txtCheck.hasTXT) {
+        labels.push('no-txt');
+        results.push({
+          ruleName: 'no-txt',
+          matched: true,
+          reason: `Domain ${email.fromDomain} has no TXT DNS records`,
+        });
+      } else {
+        results.push({
+          ruleName: 'no-txt',
+          matched: false,
+          reason: `Domain ${email.fromDomain} has TXT DNS records`,
+        });
+      }
+    } catch (error: any) {
+      // If TXT lookup fails, mark all rules as not matched
+      results.push({
+        ruleName: 'no-spf',
+        matched: false,
+        reason: `TXT lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
+      });
+      results.push({
+        ruleName: 'no-dmarc',
+        matched: false,
+        reason: `TXT lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
+      });
+      results.push({
+        ruleName: 'has-dkim',
+        matched: false,
+        reason: `TXT lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
+      });
+      results.push({
+        ruleName: 'no-txt',
+        matched: false,
+        reason: `TXT lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
       });
     }
   }
