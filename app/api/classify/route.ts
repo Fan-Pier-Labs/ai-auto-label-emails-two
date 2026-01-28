@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initializeGemini, applyAILabels } from '@/lib/ai-labeler';
 import { checkCombinedRateLimit, checkGlobalDailyRateLimit } from '@/lib/rate-limit';
 import type { Email, ClassifyEmailRequest, ClassifyEmailResponse } from '@/lib/types';
+import { getGeminiApiKey } from '@/lib/secrets';
 
 
 export async function POST(request: NextRequest) {
@@ -73,9 +74,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Initialize Gemini client
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    // Initialize Gemini client - get API key from environment or AWS Secrets Manager
+    let apiKey: string;
+    try {
+      apiKey = await getGeminiApiKey();
+    } catch (error: any) {
+      console.error('Failed to get GEMINI_API_KEY:', error.message);
       return NextResponse.json(
         { error: 'Gemini API key not configured' },
         { status: 500 }

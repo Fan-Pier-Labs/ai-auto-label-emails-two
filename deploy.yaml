@@ -15,5 +15,8 @@ task:
   ephemeral_storage: 21
   port: 8080
 
+secrets:
+  - arn:aws:secretsmanager:us-east-2:555985150976:secret:GEMINI_API_KEY-Wtqpz8
+
 # Change this to true after you set the name of this project. 
 allow_create: true
