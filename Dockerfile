@@ -14,7 +14,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN bun run build
 
 # Expose port and start
-EXPOSE 8080
-ENV PORT=8080
+EXPOSE 3000
+ENV PORT=3000
+
+# Health check (uses scripts/healthcheck.ts via package.json)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD ["bun", "run", "healthcheck"]
 
 CMD ["bun", "run", "start"]
