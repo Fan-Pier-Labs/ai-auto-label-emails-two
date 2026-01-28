@@ -1,41 +1,38 @@
 import type { LabelRule } from './types';
+import { withRetry } from './retry';
 
-export async function fetchRulesFromSheet(spreadsheetId: string): Promise<LabelRule[]> {
-  try {
-    // Google Sheets CSV export URL
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
-    
-    const response = await fetch(csvUrl);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch sheet: ${response.status} ${response.statusText}`);
-    }
-    
-    const csvText = await response.text();
-    const lines = csvText.trim().split('\n');
-    
-    const rules: LabelRule[] = [];
-    
-    // Skip header row and parse each line
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      
-      // Simple CSV parsing (handles basic cases)
-      const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
-      
-      if (parts.length >= 2) {
-        const label = parts[0];
-        const prompt = parts[1];
-        
-        if (label && prompt) {
-          rules.push({ label, prompt });
-        }
+async function fetchSheetRules(csvUrl: string): Promise<LabelRule[]> {
+  const response = await fetch(csvUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch sheet: ${response.status} ${response.statusText}`);
+  }
+  const csvText = await response.text();
+  const lines = csvText.trim().split('\n');
+  const rules: LabelRule[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
+    if (parts.length >= 2) {
+      const label = parts[0];
+      const prompt = parts[1];
+      if (label && prompt) {
+        rules.push({ label, prompt });
       }
     }
-    
-    console.log(`[Sheets] Loaded ${rules.length} rules from spreadsheet`);
-    return rules;
+  }
+  console.log(`[Sheets] Loaded ${rules.length} rules from spreadsheet`);
+  return rules;
+}
+
+export async function fetchRulesFromSheet(spreadsheetId: string): Promise<LabelRule[]> {
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
+  try {
+    return await withRetry(() => fetchSheetRules(csvUrl), {
+      maxAttempts: 3,
+      initialDelayMs: 1000,
+      maxDelayMs: 10000,
+    });
   } catch (error) {
     console.error('[Sheets] Error fetching rules:', error);
     throw error;

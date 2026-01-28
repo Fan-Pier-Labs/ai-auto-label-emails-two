@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { withRetry, isRetryableHttpError } from "@/lib/retry"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -163,6 +164,27 @@ const getDefaultLabels = (email: ExampleEmail, rules: Rule[]): ClassificationRes
   return { labels, explanations }
 }
 
+async function fetchClassifyResult(
+  email: ExampleEmail,
+  validRules: Rule[]
+): Promise<ClassificationResult> {
+  const response = await fetch("/api/classify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: { subject: email.subject, body: email.body, from: email.from },
+      rules: validRules.map(r => ({ label: r.label, prompt: r.prompt })),
+    }),
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    const err = new Error(data.error || "Failed to classify email") as Error & { status?: number }
+    err.status = response.status
+    throw err
+  }
+  return data
+}
+
 export function InteractiveDemo() {
   const [selectedEmail, setSelectedEmail] = useState<ExampleEmail>(exampleEmails[0])
   const [rules, setRules] = useState<Rule[]>([...initialPresetRules, { id: "new", label: "", prompt: "" }])
@@ -194,27 +216,15 @@ export function InteractiveDemo() {
     setError(null)
 
     try {
-      const response = await fetch("/api/classify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: {
-            subject: email.subject,
-            body: email.body,
-            from: email.from,
-          },
-          rules: validRules.map(r => ({ label: r.label, prompt: r.prompt })),
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to classify email")
-      }
-
+      const data = await withRetry(
+        () => fetchClassifyResult(email, validRules),
+        {
+          maxAttempts: 3,
+          initialDelayMs: 1000,
+          maxDelayMs: 10000,
+          isRetryable: isRetryableHttpError,
+        }
+      )
       setEmailResults(prev => ({
         ...prev,
         [email.id]: data
