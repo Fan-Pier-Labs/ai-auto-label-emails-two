@@ -593,74 +593,80 @@ function addRuleResult(
  * @param email - The email to process
  * @param enabledRules - Optional configuration for which rules are enabled.
  *                       If not provided, uses DEFAULT_DETERMINISTIC_RULES.
+ * @param options - Optional. skipHistoryRules: when true, skips rules that require Gmail history
+ *                  (first-domain, first-address, no-email-domain, no-email-address). Use for demo mode.
  */
 export async function applyDeterministicLabels(
   email: Email,
-  enabledRules?: Record<DeterministicRuleName, boolean>
+  enabledRules?: Record<DeterministicRuleName, boolean>,
+  options?: { skipHistoryRules?: boolean }
 ): Promise<{ labels: string[]; results: RuleResult[] }> {
   const labels: string[] = [];
   const results: RuleResult[] = [];
+  const skipHistory = options?.skipHistoryRules === true;
 
-  // Check if this is the first email from this domain
-  const hasSeenDomain = await hasReceivedFromDomain(email.fromDomain, email.id);
-  addRuleResult(
-    'first-domain',
-    !hasSeenDomain,
-    hasSeenDomain 
-      ? `Previously received emails from domain ${email.fromDomain}`
-      : `First email from domain ${email.fromDomain}`,
-    labels,
-    results,
-    enabledRules
-  );
-
-  // Check if this is the first email from this address
-  const hasSeenAddress = await hasReceivedFromAddress(email.fromAddress, email.id);
-  addRuleResult(
-    'first-address',
-    !hasSeenAddress,
-    hasSeenAddress
-      ? `Previously received emails from address ${email.fromAddress}`
-      : `First email from address ${email.fromAddress}`,
-    labels,
-    results,
-    enabledRules
-  );
-
-  // Check if we've never sent to any of these domains
-  if (email.toDomains.length > 0) {
-    const hasEmailedDomain = await Promise.all(
-      email.toDomains.map(domain => hasSentToDomain(domain))
-    );
-    const neverEmailedDomain = !hasEmailedDomain.some(Boolean);
+  if (!skipHistory) {
+    // Check if this is the first email from this domain
+    const hasSeenDomain = await hasReceivedFromDomain(email.fromDomain, email.id);
     addRuleResult(
-      'no-email-domain',
-      neverEmailedDomain,
-      neverEmailedDomain
-        ? `Never sent emails to domain(s): ${email.toDomains.join(', ')}`
-        : `Previously sent emails to domain(s): ${email.toDomains.join(', ')}`,
+      'first-domain',
+      !hasSeenDomain,
+      hasSeenDomain
+        ? `Previously received emails from domain ${email.fromDomain}`
+        : `First email from domain ${email.fromDomain}`,
       labels,
       results,
       enabledRules
     );
-  }
 
-  // Check if we've never sent to any of these addresses
-  if (email.toAddresses.length > 0) {
-    const hasEmailedAddress = await Promise.all(
-      email.toAddresses.map(address => hasSentToAddress(address))
-    );
-    const neverEmailedAddress = !hasEmailedAddress.some(Boolean);
+    // Check if this is the first email from this address
+    const hasSeenAddress = await hasReceivedFromAddress(email.fromAddress, email.id);
     addRuleResult(
-      'no-email-address',
-      neverEmailedAddress,
-      neverEmailedAddress
-        ? `Never sent emails to address(es): ${email.toAddresses.join(', ')}`
-        : `Previously sent emails to address(es): ${email.toAddresses.join(', ')}`,
+      'first-address',
+      !hasSeenAddress,
+      hasSeenAddress
+        ? `Previously received emails from address ${email.fromAddress}`
+        : `First email from address ${email.fromAddress}`,
       labels,
       results,
       enabledRules
     );
+
+    // Check if we've never sent to any of these domains
+    if (email.toDomains.length > 0) {
+      const hasEmailedDomain = await Promise.all(
+        email.toDomains.map(domain => hasSentToDomain(domain))
+      );
+      const neverEmailedDomain = !hasEmailedDomain.some(Boolean);
+      addRuleResult(
+        'no-email-domain',
+        neverEmailedDomain,
+        neverEmailedDomain
+          ? `Never sent emails to domain(s): ${email.toDomains.join(', ')}`
+          : `Previously sent emails to domain(s): ${email.toDomains.join(', ')}`,
+        labels,
+        results,
+        enabledRules
+      );
+    }
+
+    // Check if we've never sent to any of these addresses
+    if (email.toAddresses.length > 0) {
+      const hasEmailedAddress = await Promise.all(
+        email.toAddresses.map(address => hasSentToAddress(address))
+      );
+      const neverEmailedAddress = !hasEmailedAddress.some(Boolean);
+      addRuleResult(
+        'no-email-address',
+        neverEmailedAddress,
+        neverEmailedAddress
+          ? `Never sent emails to address(es): ${email.toAddresses.join(', ')}`
+          : `Previously sent emails to address(es): ${email.toAddresses.join(', ')}`,
+        labels,
+        results,
+        enabledRules
+      );
+    }
   }
 
   // Check domain status (down and redirects) - do both checks in one call

@@ -15,6 +15,26 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  DETERMINISTIC_RULE_NAMES,
+  DEFAULT_DETERMINISTIC_RULES,
+} from "@/lib/types"
+
+/** Human-readable label for deterministic rule names */
+function formatDeterministicRuleName(name: string): string {
+  const acronyms: Record<string, string> = {
+    smtp: "SMTP",
+    spf: "SPF",
+    dmarc: "DMARC",
+    dkim: "DKIM",
+    txt: "TXT",
+    mx: "MX",
+  }
+  return name
+    .split("-")
+    .map(part => acronyms[part.toLowerCase()] ?? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ")
+}
 
 interface Rule {
   id: string
@@ -201,6 +221,11 @@ export function InteractiveDemo() {
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
   const [formLabel, setFormLabel] = useState("")
   const [formPrompt, setFormPrompt] = useState("")
+  const [enabledDeterministicRules, setEnabledDeterministicRules] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(DETERMINISTIC_RULE_NAMES.map(n => [n, DEFAULT_DETERMINISTIC_RULES[n]]))
+  )
+  const [deterministicLabelsByFrom, setDeterministicLabelsByFrom] = useState<Record<string, string[]>>({})
+  const [deterministicLoading, setDeterministicLoading] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const savedRules = rules.filter(r => r.label.trim() && r.prompt.trim())
@@ -233,10 +258,9 @@ export function InteractiveDemo() {
         ...prev,
         [email.id]: data
       }))
-    } catch (err) {
+    } catch {
       toast({
-        title: "Classification error",
-        description: err instanceof Error ? err.message : "An error occurred",
+        title: "Something went wrong",
         variant: "destructive",
       })
     } finally {
@@ -324,6 +348,49 @@ export function InteractiveDemo() {
     return emailResults[emailId]?.labels || []
   }
 
+  const getDeterministicLabels = (from: string): string[] => {
+    return deterministicLabelsByFrom[from] ?? []
+  }
+
+  const fetchDeterministicLabels = async () => {
+    setDeterministicLoading(true)
+    try {
+      const response = await fetch("/api/deterministic-demo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emails: exampleEmails.map(e => ({ id: e.id, from: e.from })),
+          enabledRules: enabledDeterministicRules,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error ?? "Failed to fetch deterministic labels")
+      const results = (data.results ?? {}) as Record<string, { labels: string[] }>
+      setDeterministicLabelsByFrom(
+        Object.fromEntries(
+          Object.entries(results).map(([from, r]) => [from, r.labels ?? []])
+        )
+      )
+    } catch {
+      toast({
+        title: "Something went wrong",
+        variant: "destructive",
+      })
+    } finally {
+      setDeterministicLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchDeterministicLabels()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabledDeterministicRules])
+
+  const setDeterministicRuleEnabled = (ruleName: string, checked: boolean) => {
+    setEnabledDeterministicRules(prev => ({ ...prev, [ruleName]: checked }))
+  }
+
+
   // Auto-resize form textarea when form is open or rules change
   useEffect(() => {
     const textareas = document.querySelectorAll('textarea[placeholder="Enter label prompt"]')
@@ -376,7 +443,7 @@ export function InteractiveDemo() {
                     <Input
                       value={formLabel}
                       onChange={(e) => setFormLabel(e.target.value)}
-                      placeholder="enter label name"
+                      placeholder="Enter label name"
                       className="h-8 text-sm"
                     />
                     <Textarea
@@ -442,17 +509,22 @@ export function InteractiveDemo() {
                 )}
               </div>
 
-              {/* Rules section */}
+              {/* Deterministic rules section */}
               <div className="border-t border-border pt-4">
                 <h3 className="mb-3 text-lg font-semibold">Rules</h3>
-                <div className="space-y-2">
-                  {savedRules.map((rule, index) => (
+                <div className="rules-list-thin-scrollbar max-h-64 space-y-2 overflow-y-auto">
+                  {DETERMINISTIC_RULE_NAMES.map((ruleName) => (
                     <label
-                      key={rule.id}
-                      className="flex cursor-default items-center gap-2 text-sm"
+                      key={ruleName}
+                      className="flex cursor-pointer items-center gap-2 text-sm"
                     >
-                      <Checkbox checked onCheckedChange={() => {}} />
-                      <span>Rule {index + 1}</span>
+                      <Checkbox
+                        checked={enabledDeterministicRules[ruleName] ?? false}
+                        onCheckedChange={(checked) =>
+                          setDeterministicRuleEnabled(ruleName, checked === true)
+                        }
+                      />
+                      <span>{formatDeterministicRuleName(ruleName)}</span>
                     </label>
                   ))}
                 </div>
@@ -463,11 +535,13 @@ export function InteractiveDemo() {
           {/* Right Side - Gmail-style Email List */}
           <div>
             <Card className="p-6">
-              <h3 className="mb-4 text-lg font-semibold">Example Emails</h3>
+              <h3 className="mb-4 text-lg font-semibold">Inbox</h3>
               
               <div className="space-y-0 divide-y divide-border">
                 {exampleEmails.map((email) => {
-                  const labels = getEmailLabels(email.id)
+                  const aiLabels = getEmailLabels(email.id)
+                  const detLabels = getDeterministicLabels(email.from)
+                  const labels = [...aiLabels, ...detLabels]
                   const isSelected = selectedEmail?.id === email.id
                   
                   return (
@@ -480,7 +554,9 @@ export function InteractiveDemo() {
                     >
                       <div
                         className={`flex items-center text-sm whitespace-nowrap ${
-                          loading ? "animate-pulse text-muted-foreground/70" : ""
+                          loading || deterministicLoading
+                            ? "animate-pulse text-muted-foreground/70"
+                            : ""
                         }`}
                       >
                         <span className="text-foreground w-[140px] flex-shrink-0">
