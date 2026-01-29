@@ -15,7 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FileSpreadsheet, Info } from "lucide-react";
+import { FileSpreadsheet, Info, CopyPlus, ExternalLink } from "lucide-react";
+
+const TEMPLATE_SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1oRvLEi2uj0ENbJ42EyINLzWcbC92HwGriMq5ejKhXYM/edit?gid=0#gid=0";
 
 interface SetupFormProps {
   stripeCheckoutUrl: string;
@@ -65,6 +68,27 @@ export function SetupForm({ stripeCheckoutUrl }: SetupFormProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            <Alert className="border-primary/50 bg-primary/5">
+              <CopyPlus className="h-4 w-4" />
+              <AlertTitle>New here? Start with our template</AlertTitle>
+              <AlertDescription className="mt-1 space-y-2">
+                <p>
+                  Copy our template spreadsheet to get pre-filled columns (Label Name, Label Prompt, Enabled?) and example rules. Then use <strong>File → Make a copy</strong> in Google Sheets so you have your own editable sheet.
+                </p>
+                <p>
+                  <a
+                    href={TEMPLATE_SHEET_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 font-medium text-primary underline underline-offset-4 hover:no-underline"
+                  >
+                    Open template spreadsheet
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </p>
+              </AlertDescription>
+            </Alert>
+
             <Alert>
               <Info className="h-4 w-4" />
               <AlertTitle>How your sheet is used</AlertTitle>
