@@ -4,7 +4,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { storeRefreshToken } from '@/lib/token-store';
 
-const STRIPE_CHECKOUT_URL = 'https://buy.stripe.com/aFafZi8IV8wpgd742E5gc07';
+const STRIPE_CHECKOUT_URL = process.env.STRIPE_CHECKOUT_URL;
 
 interface GoogleCreds {
   web?: {
@@ -124,6 +124,10 @@ export async function GET(request: NextRequest) {
       // Continue to Stripe anyway - webhook will handle if email is available
     }
     
+
+    if (!STRIPE_CHECKOUT_URL) {
+      throw new Error('STRIPE_CHECKOUT_URL is not set');
+    }
     // Clear the state cookie and redirect to Stripe
     const response = NextResponse.redirect(STRIPE_CHECKOUT_URL);
     response.cookies.delete('oauth_state');
