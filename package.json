@@ -18,7 +18,7 @@
     "test": "bun test $(find lib -name '*.test.ts' ! -name '*.network.test.ts')",
     "test:network": "bun test $(find . -name '*.network.test.ts')",
     "test:all": "bun test",
-    "deploy": "bun run build && python3 ./node_modules/deploy/main.py --config deploy.yaml"
+    "deploy": "./node_modules/.bin/bun run build && python3 ./node_modules/deploy/main.py --config deploy.yaml"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.978.0",
@@ -52,6 +52,7 @@
     "@radix-ui/react-toggle-group": "1.1.1",
     "@radix-ui/react-tooltip": "1.1.6",
     "@sentry/nextjs": "^10.38.0",
+    "bun": "^1.3.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
