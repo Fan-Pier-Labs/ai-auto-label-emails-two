@@ -5,7 +5,7 @@
     "": {
       "name": "auto-label-email-ai",
       "dependencies": {
-        "@aws-sdk/client-secrets-manager": "^3.975.0",
+        "@aws-sdk/client-secrets-manager": "^3.978.0",
         "@google/generative-ai": "^0.21.0",
         "@hookform/resolvers": "^3.10.0",
         "@radix-ui/react-accordion": "1.2.2",
@@ -35,7 +35,7 @@
         "@radix-ui/react-toggle": "1.1.1",
         "@radix-ui/react-toggle-group": "1.1.1",
         "@radix-ui/react-tooltip": "1.1.6",
-        "@sentry/nextjs": "^10",
+        "@sentry/nextjs": "^10.38.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "1.0.4",
@@ -55,7 +55,7 @@
         "react-resizable-panels": "^2.1.9",
         "recharts": "2.15.4",
         "sonner": "^1.7.4",
-        "stripe": "^20.2.0",
+        "stripe": "^20.3.0",
         "tailwind-merge": "^3.4.0",
         "tailwindcss-animate": "^1.0.7",
         "vaul": "^1.1.2",
@@ -850,7 +850,7 @@
 
     "decimal.js-light": ["decimal.js-light@2.5.1", "", {}, "sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg=="],
 
-    "deploy": ["deploy@github:fan-Pier-Labs/deploy#b4951e1", {}, "Fan-Pier-Labs-deploy-b4951e1"],
+    "deploy": ["deploy@github:fan-Pier-Labs/deploy#540bf65", {}, "Fan-Pier-Labs-deploy-540bf65"],
 
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
 
