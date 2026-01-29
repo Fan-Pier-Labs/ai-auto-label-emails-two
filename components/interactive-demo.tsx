@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Sparkles, Plus, Pencil } from "lucide-react"
+import { Trash2, Sparkles, Plus, Pencil, PartyPopper } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -15,6 +15,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { exampleEmails, wildEmails, type ExampleEmail } from "@/lib/demo-emails"
 import {
   DETERMINISTIC_RULE_NAMES,
   type DeterministicRuleName,
@@ -61,189 +62,6 @@ interface ClassificationResult {
   labels: string[]
   explanations: Record<string, string>
 }
-
-interface ExampleEmail {
-  id: string
-  from: string
-  fromName: string
-  subject: string
-  body: string
-}
-
-const exampleEmails: ExampleEmail[] = [
-  {
-    id: "1",
-    fromName: "John Doe",
-    from: "john.doe@email.com",
-    subject: "Software Engineer Position - Application",
-    body: `Dear Hiring Manager,
-
-I am writing to express my strong interest in the Software Engineer position that was recently posted. With over 5 years of experience in full-stack development, I believe I would be a great fit for your team.
-
-My background includes:
-- Expertise in React, TypeScript, and Node.js
-- Experience building scalable web applications
-- Strong problem-solving and communication skills
-
-I have attached my resume for your review. I would welcome the opportunity to discuss how my skills and experience align with your needs.
-
-Thank you for your consideration.
-
-Best regards,
-John Doe`
-  },
-  {
-    id: "2",
-    fromName: "TechProduct Team",
-    from: "sales@techproduct.com",
-    subject: "Revolutionize Your Workflow with Our New AI Tool",
-    body: `Hi there!
-
-Are you tired of spending hours on repetitive tasks? Our new AI-powered automation tool can help you save up to 10 hours per week!
-
-Key features:
-✨ Intelligent task automation
-✨ Seamless integrations with your favorite tools
-✨ 24/7 customer support
-✨ 30-day money-back guarantee
-
-Special offer: Get 50% off your first month when you sign up today!
-
-Click here to start your free trial: [link]
-
-Don't miss out on this limited-time offer!
-
-Best,
-The TechProduct Team`
-  },
-  {
-    id: "3",
-    fromName: "TechBlog Newsletter",
-    from: "newsletter@techblog.com",
-    subject: "Weekly Tech Digest - AI Breakthroughs & Industry News",
-    body: `This week in tech:
-
-🤖 AI Breakthrough: New language model achieves human-level performance
-📱 Mobile: Latest smartphone releases and reviews
-💻 Development: New frameworks and tools for developers
-🚀 Startups: Funding rounds and acquisitions
-
-Read the full articles on our website.
-
-You're receiving this because you subscribed to our newsletter. Unsubscribe here.`
-  },
-  {
-    id: "4",
-    fromName: "Sarah Chen",
-    from: "sarah.chen@company.com",
-    subject: "Q4 Planning Meeting - Next Steps",
-    body: `Hi team,
-
-I'd like to schedule a meeting to discuss our Q4 planning and review the roadmap. 
-
-Proposed agenda:
-- Review Q3 results
-- Discuss Q4 objectives
-- Resource allocation
-- Timeline and milestones
-
-Please let me know your availability for next week. I'm free Tuesday-Thursday afternoons.
-
-Looking forward to our discussion!
-
-Best,
-Sarah`
-  },
-  {
-    id: "5",
-    fromName: "Support",
-    from: "support@helpdesk.io",
-    subject: "Ticket #7842 – Your request has been resolved",
-    body: `Hello,
-
-Your support ticket #7842 has been resolved.
-
-Summary: Password reset and 2FA setup completed successfully.
-
-If you have any further questions, reply to this email or open a new ticket.
-
-Thank you for contacting us.
-
-Customer Support
-helpdesk.io`
-  },
-  {
-    id: "6",
-    fromName: "Billing",
-    from: "billing@payments.example.com",
-    subject: "Invoice INV-2024-0892 – Payment received",
-    body: `Dear Customer,
-
-We have received your payment of $149.00 for Invoice INV-2024-0892.
-
-Payment method: Credit card ending in 4242
-Date: January 28, 2025
-
-You can download your receipt and invoice from the billing portal. If you have any questions about this invoice, contact our billing team.
-
-Thank you for your business.
-
-Billing Department`
-  },
-  {
-    id: "7",
-    fromName: "Notifications",
-    from: "notifications@socialapp.com",
-    subject: "Alex commented on your post",
-    body: `Hi,
-
-Alex Johnson commented on your post: "Great point! I'd add that we should also consider the timeline."
-
-View the conversation and reply here: [link]
-
-You can manage notification preferences in your account settings.
-
-— The SocialApp Team`
-  },
-  {
-    id: "8",
-    fromName: "Mike Wilson",
-    from: "mike.wilson@gmail.com",
-    subject: "Re: Weekend plans?",
-    body: `Hey!
-
-Just checking in – are we still on for Saturday? I was thinking we could do the hike in the morning and then grab lunch downtown.
-
-Let me know what works for you.
-
-Mike`
-  },
-  {
-    id: "9",
-    fromName: "Account Security",
-    from: "noreply@secure-login.xyz",
-    subject: "Urgent: Verify your account now",
-    body: `Your account has been flagged for unusual activity. Verify your identity immediately to avoid suspension.
-
-Click here to verify: [link]
-
-This is an automated message. Do not reply.`
-  },
-  {
-    id: "10",
-    fromName: "HR Team",
-    from: "hr@company.com",
-    subject: "Open enrollment – benefits and 401(k)",
-    body: `Hello everyone,
-
-Open enrollment for benefits and 401(k) runs from February 1–15.
-
-Please review the attached guide and submit your elections in the HR portal by the deadline. If you have questions, join our drop-in sessions on Feb 5 and 12.
-
-Best,
-Human Resources`
-  }
-]
 
 // Initial preset rules (loaded on page load)
 const initialPresetRules: Rule[] = [
@@ -309,11 +127,11 @@ async function fetchClassifyResult(
 }
 
 export function InteractiveDemo() {
+  const [emails, setEmails] = useState<ExampleEmail[]>(() => [...exampleEmails])
   const [selectedEmail, setSelectedEmail] = useState<ExampleEmail>(exampleEmails[0])
   const [rules, setRules] = useState<Rule[]>([...initialPresetRules])
   const [loading, setLoading] = useState(false)
   const [emailResults, setEmailResults] = useState<Record<string, ClassificationResult>>(() => {
-    // Initialize with default labels based on simple matching
     const defaultResults: Record<string, ClassificationResult> = {}
     exampleEmails.forEach(email => {
       defaultResults[email.id] = getDefaultLabels(email, initialPresetRules)
@@ -383,7 +201,7 @@ export function InteractiveDemo() {
     const validRules = rules.filter(r => r.label.trim() && r.prompt.trim())
     if (validRules.length > 0) {
       timeoutRef.current = setTimeout(() => {
-        exampleEmails.forEach(email => {
+        emails.forEach(email => {
           classifyEmail(email)
         })
       }, 500) // 500ms debounce
@@ -395,7 +213,7 @@ export function InteractiveDemo() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rules, hasUserEdited])
+  }, [rules, hasUserEdited, emails])
 
   const updateRule = (id: string, field: "label" | "prompt", value: string) => {
     setHasUserEdited(true)
@@ -463,7 +281,7 @@ export function InteractiveDemo() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          emails: exampleEmails.map(e => ({ id: e.id, from: e.from })),
+          emails: emails.map(e => ({ id: e.id, from: e.from })),
           enabledRules: enabledDeterministicRules,
         }),
       })
@@ -488,12 +306,44 @@ export function InteractiveDemo() {
   useEffect(() => {
     fetchDeterministicLabels()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabledDeterministicRules])
+  }, [enabledDeterministicRules, emails])
 
   const setDeterministicRuleEnabled = (ruleName: string, checked: boolean) => {
     setEnabledDeterministicRules(prev => ({ ...prev, [ruleName]: checked }))
   }
 
+  const hasWildEmails = emails.some(e => e.id.startsWith("wild-"))
+
+  const addWildEmails = () => {
+    const ts = Date.now()
+    const newEmails: ExampleEmail[] = wildEmails.map((e, i) => ({
+      ...e,
+      id: `wild-${ts}-${i}`,
+    }))
+    setEmails(prev => [...newEmails, ...prev])
+    setEmailResults(prev => {
+      const next = { ...prev }
+      const validRules = rules.filter(r => r.label.trim() && r.prompt.trim())
+      newEmails.forEach(email => {
+        next[email.id] = getDefaultLabels(email, validRules)
+      })
+      return next
+    })
+  }
+
+  const removeWildEmails = () => {
+    const remaining = emails.filter(e => !e.id.startsWith("wild-"))
+    const wildIds = new Set(emails.filter(e => e.id.startsWith("wild-")).map(e => e.id))
+    setEmails(remaining)
+    setEmailResults(prev => {
+      const next = { ...prev }
+      wildIds.forEach(id => delete next[id])
+      return next
+    })
+    if (selectedEmail && wildIds.has(selectedEmail.id) && remaining.length > 0) {
+      setSelectedEmail(remaining[0])
+    }
+  }
 
   // Auto-resize form textarea when form is open or rules change
   useEffect(() => {
@@ -657,58 +507,78 @@ export function InteractiveDemo() {
           {/* Right Side - Gmail-style Email List */}
           <div className="min-h-0">
             <Card className="p-6 h-full">
-              <h3 className="mb-4 text-lg font-semibold">Inbox</h3>
-              
-              <div className="space-y-0 divide-y divide-border">
-                {exampleEmails.map((email) => {
-                  const aiLabels = getEmailLabels(email.id)
-                  const detLabels = getDeterministicLabels(email.from)
-                  const labels = [...aiLabels, ...detLabels]
-                  const isSelected = selectedEmail?.id === email.id
-                  
-                  return (
-                    <div
-                      key={email.id}
-                      className={`cursor-pointer p-3 transition-colors hover:bg-muted/50 ${
-                        isSelected ? "bg-primary/10 border-l-4 border-l-primary" : ""
-                      }`}
-                      onClick={() => setSelectedEmail(email)}
-                    >
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h3 className="text-lg font-semibold">Inbox</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={hasWildEmails ? removeWildEmails : addWildEmails}
+                  className="gap-1.5"
+                >
+                  {hasWildEmails ? (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      Remove fun
+                    </>
+                  ) : (
+                    <>
+                      <PartyPopper className="h-4 w-4" />
+                      Add wild emails
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              <div className="space-y-0 divide-y divide-border h-[420px] overflow-y-auto flex-shrink-0 rules-list-thin-scrollbar">
+                {emails.map((email) => {
+                    const aiLabels = getEmailLabels(email.id)
+                    const detLabels = getDeterministicLabels(email.from)
+                    const labels = [...aiLabels, ...detLabels]
+                    const isSelected = selectedEmail?.id === email.id
+
+                    return (
                       <div
-                        className={`flex items-center text-sm whitespace-nowrap ${
-                          loading || deterministicLoading
-                            ? "animate-pulse text-muted-foreground/70"
-                            : ""
+                        key={email.id}
+                        className={`cursor-pointer p-3 transition-colors hover:bg-muted/50 ${
+                          isSelected ? "bg-primary/10 border-l-4 border-l-primary" : ""
                         }`}
+                        onClick={() => setSelectedEmail(email)}
                       >
-                        <span className="text-foreground w-[140px] flex-shrink-0">
-                          {email.fromName}
-                        </span>
-                        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden" style={{ paddingLeft: "1rem" }}>
-                          {labels.length > 0 && (
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              {labels.map((label) => (
-                                <Badge
-                                  key={label}
-                                  variant="secondary"
-                                  className="text-xs px-1.5 py-0 h-5"
-                                >
-                                  {label}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                          <span className="font-semibold flex-shrink-0">
-                            {email.subject}
+                        <div
+                          className={`flex items-center text-sm whitespace-nowrap ${
+                            loading || deterministicLoading
+                              ? "animate-pulse text-muted-foreground/70"
+                              : ""
+                          }`}
+                        >
+                          <span className="text-foreground w-[140px] flex-shrink-0">
+                            {email.fromName}
                           </span>
-                          <span className="text-muted-foreground truncate ml-2">
-                            {truncateText(email.body, 60)}
-                          </span>
+                          <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden" style={{ paddingLeft: "1rem" }}>
+                            {labels.length > 0 && (
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {labels.map((label) => (
+                                  <Badge
+                                    key={label}
+                                    variant="secondary"
+                                    className="text-xs px-1.5 py-0 h-5"
+                                  >
+                                    {label}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                            <span className="font-semibold flex-shrink-0">
+                              {email.subject}
+                            </span>
+                            <span className="text-muted-foreground truncate ml-2">
+                              {truncateText(email.body, 60)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
               </div>
             </Card>
           </div>

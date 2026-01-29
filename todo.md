@@ -25,9 +25,9 @@ deterministic rules
 
 todo
 
-- [ ] interactive demo needs some work (labels on the left should be labels, config box should be wider, trash can instead of x)
-- [ ] want to surface the deterministic rules as well to the fe. this can be another section below the ai rules demo portion.
-- [ ] add some more test emails. also add a button to add even more test emails these emails can be hardcoded in the frontend, and just added when the user clicks the add button. Also, add another button that says "Add ~wild~ emails" and we can have it add a bunch of hilarious emails
+- [x] interactive demo needs some work (labels on the left should be labels, config box should be wider, trash can instead of x)
+- [x] want to surface the deterministic rules as well to the fe. this can be another section below the ai rules demo portion.
+- [x] add some more test emails. also add a button to add even more test emails these emails can be hardcoded in the frontend, and just added when the user clicks the add button. Also, add another button that says "Add ~wild~ emails" and we can have it add a bunch of hilarious emails
 - [x] remove the "no database needed" cell. do something else. or just have 3 cells
 - [x] update the github link
 
