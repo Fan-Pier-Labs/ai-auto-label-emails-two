@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { retrieveRefreshToken } from '@/lib/token-store';
+import { retrieveForWebhook } from '@/lib/token-store';
 
 // Lazy initialization to avoid issues during build time
 function getStripe(): Stripe {
@@ -40,76 +40,69 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    // Handle the event: subscription created → attach pending token + sheet ID to customer
+    if (event.type === 'customer.subscription.created') {
+      const subscription = event.data.object as Stripe.Subscription;
 
-    // Handle the event
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
-      
-      // Get customer email
-      const customerEmail = session.customer_email || 
-        (typeof session.customer === 'string' 
-          ? null 
-          : (session.customer && 'email' in session.customer ? session.customer.email : null)) ||
-        session.customer_details?.email;
+      // Subscription has customer ID; get customer to read email (subscription object has no email field)
+      const customerId =
+        typeof subscription.customer === 'string'
+          ? subscription.customer
+          : subscription.customer?.id;
 
-      if (!customerEmail) {
-        console.error('No customer email found in checkout session');
+      if (!customerId) {
+        console.error('No customer ID on subscription');
+        return NextResponse.json(
+          { error: 'No customer on subscription' },
+          { status: 400 }
+        );
+      }
+
+      const customer = await stripe.customers.retrieve(customerId);
+      if (customer.deleted) {
+        console.error('Customer is deleted');
+        return NextResponse.json(
+          { error: 'Customer deleted' },
+          { status: 400 }
+        );
+      }
+
+      const rawEmail = (customer as Stripe.Customer).email;
+      if (!rawEmail?.trim()) {
+        console.error('No customer email found');
         return NextResponse.json(
           { error: 'No customer email found' },
           { status: 400 }
         );
       }
+      const customerEmail = rawEmail.trim().toLowerCase();
 
-      // Retrieve refresh token from store
-      const refreshToken = retrieveRefreshToken(customerEmail);
+      const pending = retrieveForWebhook(customerEmail);
+      const refreshToken = pending?.refreshToken ?? null;
+      const sheetId = pending?.sheetId ?? null;
 
       if (!refreshToken) {
         console.error(`No refresh token found for email: ${customerEmail}`);
-        // Don't fail the webhook - just log the error
-        // The token might have expired or the email doesn't match
         return NextResponse.json({ received: true, warning: 'No refresh token found' });
       }
 
-      // Get or create customer
-      let customerId: string;
-      if (typeof session.customer === 'string') {
-        customerId = session.customer;
-      } else if (session.customer) {
-        customerId = session.customer.id;
-      } else if (session.customer_details?.email) {
-        // Try to find existing customer by email
-        const customers = await stripe.customers.list({
-          email: customerEmail,
-          limit: 1,
-        });
-        
-        if (customers.data.length > 0) {
-          customerId = customers.data[0].id;
-        } else {
-          // Create new customer
-          const customer = await stripe.customers.create({
-            email: customerEmail,
-          });
-          customerId = customer.id;
-        }
-      } else {
-        console.error('No customer information found in checkout session');
-        return NextResponse.json(
-          { error: 'No customer information found' },
-          { status: 400 }
-        );
-      }
+      const existingMetadata: Record<string, string> =
+        customer.metadata && typeof customer.metadata === 'object'
+          ? { ...customer.metadata }
+          : {};
+      const metadata: Record<string, string> = {
+        ...existingMetadata,
+        gmail_refresh_token: refreshToken,
+        gmail_email: customerEmail,
+        google_sheet_id: sheetId ?? '',
+        updated_at: new Date().toISOString(),
+      };
+      await stripe.customers.update(customerId, { metadata });
 
-      // Update customer metadata with refresh token
-      await stripe.customers.update(customerId, {
-        metadata: {
-          gmail_refresh_token: refreshToken,
-          gmail_email: customerEmail,
-          updated_at: new Date().toISOString(),
-        },
-      });
-
-      console.log(`✅ Updated Stripe customer ${customerId} with refresh token for ${customerEmail}`);
+      console.log(
+        `✅ Updated Stripe customer ${customerId} with refresh token for ${customerEmail}` +
+          (sheetId ? ' and google_sheet_id' : '')
+      );
 
       return NextResponse.json({ received: true, customerId });
     }

@@ -4,7 +4,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { storeRefreshToken } from '@/lib/token-store';
 
-const STRIPE_CHECKOUT_URL = process.env.STRIPE_CHECKOUT_URL;
+const SETUP_COOKIE_MAX_AGE = 30 * 60; // 30 minutes, match token store expiry
 
 interface GoogleCreds {
   web?: {
@@ -121,17 +121,23 @@ export async function GET(request: NextRequest) {
       }
     } catch (error) {
       console.error('❌ Error getting user email from Gmail API:', error);
-      // Continue to Stripe anyway - webhook will handle if email is available
     }
-    
 
-    if (!STRIPE_CHECKOUT_URL) {
-      throw new Error('STRIPE_CHECKOUT_URL is not set');
-    }
-    // Clear the state cookie and redirect to Stripe
-    const response = NextResponse.redirect(STRIPE_CHECKOUT_URL);
+    // Redirect to /setup so user can enter sheet URL; set email cookie for /setup form
+    const setupUrl = new URL('/setup', request.url);
+    const response = NextResponse.redirect(setupUrl);
     response.cookies.delete('oauth_state');
-    
+
+    if (userEmail) {
+      response.cookies.set('setup_email', userEmail, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: SETUP_COOKIE_MAX_AGE,
+        path: '/',
+      });
+    }
+
     return response;
   } catch (error) {
     console.error('Error in OAuth callback:', error);
