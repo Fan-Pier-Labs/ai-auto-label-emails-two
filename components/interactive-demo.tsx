@@ -6,16 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Trash2, Sparkles } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Trash2, Sparkles, Plus, Pencil } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { toast } from "@/hooks/use-toast"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-} from "@/components/ui/table"
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface Rule {
   id: string
@@ -187,7 +186,7 @@ async function fetchClassifyResult(
 
 export function InteractiveDemo() {
   const [selectedEmail, setSelectedEmail] = useState<ExampleEmail>(exampleEmails[0])
-  const [rules, setRules] = useState<Rule[]>([...initialPresetRules, { id: "new", label: "", prompt: "" }])
+  const [rules, setRules] = useState<Rule[]>([...initialPresetRules])
   const [loading, setLoading] = useState(false)
   const [emailResults, setEmailResults] = useState<Record<string, ClassificationResult>>(() => {
     // Initialize with default labels based on simple matching
@@ -197,9 +196,15 @@ export function InteractiveDemo() {
     })
     return defaultResults
   })
-  const [error, setError] = useState<string | null>(null)
   const [hasUserEdited, setHasUserEdited] = useState(false)
+  const [showLabelForm, setShowLabelForm] = useState(false)
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
+  const [formLabel, setFormLabel] = useState("")
+  const [formPrompt, setFormPrompt] = useState("")
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const savedRules = rules.filter(r => r.label.trim() && r.prompt.trim())
+  const isFormOpen = showLabelForm || editingRuleId !== null
 
   const classifyEmail = async (email: ExampleEmail) => {
     // Filter out empty rules
@@ -213,7 +218,6 @@ export function InteractiveDemo() {
     if (loading) return
 
     setLoading(true)
-    setError(null)
 
     try {
       const data = await withRetry(
@@ -230,7 +234,11 @@ export function InteractiveDemo() {
         [email.id]: data
       }))
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred")
+      toast({
+        title: "Classification error",
+        description: err instanceof Error ? err.message : "An error occurred",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -263,33 +271,48 @@ export function InteractiveDemo() {
 
   const updateRule = (id: string, field: "label" | "prompt", value: string) => {
     setHasUserEdited(true)
-    const updatedRules = rules.map(r => r.id === id ? { ...r, [field]: value } : r)
-    
-    // If this is the last row and both fields are now filled, add a new empty row
-    const lastRule = updatedRules[updatedRules.length - 1]
-    if (lastRule && lastRule.id === id) {
-      const oldRule = rules.find(r => r.id === id)
-      const wasEmpty = !oldRule?.label.trim() || !oldRule?.prompt.trim()
-      const nowFilled = lastRule.label.trim() && lastRule.prompt.trim()
-      
-      if (wasEmpty && nowFilled) {
-        // Add new empty row
-        updatedRules.push({ id: `new-${Date.now()}`, label: "", prompt: "" })
-      }
-    }
-    
-    setRules(updatedRules)
+    setRules(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
   }
 
   const removeRule = (id: string) => {
     setHasUserEdited(true)
-    const filtered = rules.filter(r => r.id !== id)
-    // Ensure there's always at least one empty row at the end
-    const lastRule = filtered[filtered.length - 1]
-    if (!lastRule || (lastRule.label.trim() && lastRule.prompt.trim())) {
-      filtered.push({ id: `new-${Date.now()}`, label: "", prompt: "" })
+    setRules(prev => prev.filter(r => r.id !== id))
+  }
+
+  const openAddForm = () => {
+    setShowLabelForm(true)
+    setEditingRuleId(null)
+    setFormLabel("")
+    setFormPrompt("")
+  }
+
+  const openEditForm = (rule: Rule) => {
+    setEditingRuleId(rule.id)
+    setShowLabelForm(false)
+    setFormLabel(rule.label)
+    setFormPrompt(rule.prompt)
+  }
+
+  const closeForm = () => {
+    setShowLabelForm(false)
+    setEditingRuleId(null)
+    setFormLabel("")
+    setFormPrompt("")
+  }
+
+  const saveForm = () => {
+    const label = formLabel.trim()
+    const prompt = formPrompt.trim()
+    if (!label || !prompt) return
+    if (editingRuleId) {
+      setRules(prev => prev.map(r =>
+        r.id === editingRuleId ? { ...r, label, prompt } : r
+      ))
+    } else {
+      setRules(prev => [...prev, { id: `new-${Date.now()}`, label, prompt }])
     }
-    setRules(filtered)
+    setHasUserEdited(true)
+    closeForm()
   }
 
   const truncateText = (text: string, maxLength: number = 80) => {
@@ -301,15 +324,15 @@ export function InteractiveDemo() {
     return emailResults[emailId]?.labels || []
   }
 
-  // Auto-resize textareas on mount and when rules change
+  // Auto-resize form textarea when form is open or rules change
   useEffect(() => {
-    const textareas = document.querySelectorAll('textarea[placeholder="AI prompt description"]')
+    const textareas = document.querySelectorAll('textarea[placeholder="Enter label prompt"]')
     textareas.forEach((textarea) => {
       const el = textarea as HTMLTextAreaElement
-      el.style.height = 'auto'
+      el.style.height = "auto"
       el.style.height = `${el.scrollHeight}px`
     })
-  }, [rules])
+  }, [rules, isFormOpen])
 
   return (
     <section id="demo" className="px-6 py-24 bg-muted/30">
@@ -327,68 +350,112 @@ export function InteractiveDemo() {
           </p>
         </div>
 
-        <div className="grid gap-8" style={{ gridTemplateColumns: '50% 50%' }}>
-          {/* Left Side - Labels Table */}
+        <div className="grid gap-8" style={{ gridTemplateColumns: "30% 70%" }}>
+          {/* Left Side - Labels sidebar */}
           <div>
             <Card className="p-6 h-full">
-              <h3 className="mb-4 text-lg font-semibold">AI Label Configuration</h3>
-              
-              {loading && (
-                <div className="mb-4 flex items-center justify-center py-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              {/* Labels section */}
+              <div className="mb-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Labels</h3>
+                  {!isFormOpen && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={openAddForm}
+                      className="h-8 w-8"
+                      aria-label="Add label"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
-              )}
 
-              {error && (
-                <Alert variant="destructive" className="mb-4">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              <div className="rounded-lg border border-border overflow-hidden w-full">
-                <Table>
-                  <TableBody>
-                    {rules.map((rule) => (
-                      <TableRow key={rule.id}>
-                        <TableCell className="p-2 w-[140px]">
-                          <Input
-                            value={rule.label}
-                            onChange={(e) => updateRule(rule.id, "label", e.target.value)}
-                            placeholder="Label name"
-                            className="h-8 text-sm"
-                          />
-                        </TableCell>
-                        <TableCell className="p-2">
-                          <Textarea
-                            value={rule.prompt}
-                            onChange={(e) => {
-                              updateRule(rule.id, "prompt", e.target.value)
-                              // Auto-resize textarea
-                              e.target.style.height = 'auto'
-                              e.target.style.height = `${e.target.scrollHeight}px`
-                            }}
-                            placeholder="AI prompt description"
-                            className="min-h-[32px] text-sm resize-none overflow-hidden"
-                            rows={1}
-                            style={{ height: 'auto' }}
-                          />
-                        </TableCell>
-                        <TableCell className="p-2 w-[50px]">
-                          {rule.label.trim() || rule.prompt.trim() ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeRule(rule.id)}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
+                {isFormOpen ? (
+                  <div className="space-y-3 rounded-lg border border-border p-3">
+                    <Input
+                      value={formLabel}
+                      onChange={(e) => setFormLabel(e.target.value)}
+                      placeholder="enter label name"
+                      className="h-8 text-sm"
+                    />
+                    <Textarea
+                      value={formPrompt}
+                      onChange={(e) => {
+                        setFormPrompt(e.target.value)
+                        e.target.style.height = "auto"
+                        e.target.style.height = `${e.target.scrollHeight}px`
+                      }}
+                      placeholder="Enter label prompt"
+                      className="min-h-[32px] text-sm resize-none overflow-hidden"
+                      rows={2}
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={closeForm}>
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={saveForm}>
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {savedRules.map((rule) => (
+                      <div
+                        key={rule.id}
+                        className="flex items-center justify-between gap-2 p-2"
+                      >
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="min-w-0 flex-1 truncate text-sm text-foreground cursor-default">
+                              {rule.label}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" align="center" className="max-w-xs">
+                            {rule.prompt}
+                          </TooltipContent>
+                        </Tooltip>
+                        <div className="flex shrink-0 items-center gap-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditForm(rule)}
+                            className="h-8 w-8"
+                            aria-label="Edit label"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeRule(rule.id)}
+                            className="h-8 w-8"
+                            aria-label="Delete label"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                )}
+              </div>
+
+              {/* Rules section */}
+              <div className="border-t border-border pt-4">
+                <h3 className="mb-3 text-lg font-semibold">Rules</h3>
+                <div className="space-y-2">
+                  {savedRules.map((rule, index) => (
+                    <label
+                      key={rule.id}
+                      className="flex cursor-default items-center gap-2 text-sm"
+                    >
+                      <Checkbox checked onCheckedChange={() => {}} />
+                      <span>Rule {index + 1}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </Card>
           </div>
@@ -411,16 +478,21 @@ export function InteractiveDemo() {
                       }`}
                       onClick={() => setSelectedEmail(email)}
                     >
-                      <div className="flex items-center text-sm whitespace-nowrap">
-                        <span className="text-foreground w-[140px] flex-shrink-0">{email.fromName}</span>
-                        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden" style={{ paddingLeft: '1rem' }}>
-                          {/* Labels to the left of subject */}
+                      <div
+                        className={`flex items-center text-sm whitespace-nowrap ${
+                          loading ? "animate-pulse text-muted-foreground/70" : ""
+                        }`}
+                      >
+                        <span className="text-foreground w-[140px] flex-shrink-0">
+                          {email.fromName}
+                        </span>
+                        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden" style={{ paddingLeft: "1rem" }}>
                           {labels.length > 0 && (
                             <div className="flex items-center gap-1 flex-shrink-0">
                               {labels.map((label) => (
-                                <Badge 
-                                  key={label} 
-                                  variant="secondary" 
+                                <Badge
+                                  key={label}
+                                  variant="secondary"
                                   className="text-xs px-1.5 py-0 h-5"
                                 >
                                   {label}
@@ -428,11 +500,9 @@ export function InteractiveDemo() {
                               ))}
                             </div>
                           )}
-                          {/* Subject - always at consistent position */}
                           <span className="font-semibold flex-shrink-0">
                             {email.subject}
                           </span>
-                          {/* Email preview */}
                           <span className="text-muted-foreground truncate ml-2">
                             {truncateText(email.body, 60)}
                           </span>
