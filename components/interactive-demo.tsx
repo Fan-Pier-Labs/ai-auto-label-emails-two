@@ -17,8 +17,23 @@ import {
 } from "@/components/ui/tooltip"
 import {
   DETERMINISTIC_RULE_NAMES,
-  DEFAULT_DETERMINISTIC_RULES,
+  type DeterministicRuleName,
 } from "@/lib/types"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+
+/** Groups of deterministic rules for accordion UI */
+const DETERMINISTIC_RULE_GROUPS: { title: string; rules: readonly DeterministicRuleName[] }[] = [
+  { title: "First-time sender", rules: ["first-domain", "first-address"] },
+  { title: "Invalid or missing sender", rules: ["no-email-domain", "no-email-address"] },
+  { title: "Domain status", rules: ["domain-down", "domain-redirects", "new-domain", "domain-resolves-known-provider"] },
+  { title: "SMTP provider", rules: ["smtp-gmail", "smtp-msft", "smtp-automation", "smtp-work-email", "smtp-other"] },
+  { title: "DNS & authentication", rules: ["no-spf", "no-dmarc", "has-dkim", "no-txt"] },
+]
 
 /** Human-readable label for deterministic rule names */
 function formatDeterministicRuleName(name: string): string {
@@ -138,6 +153,95 @@ Looking forward to our discussion!
 
 Best,
 Sarah`
+  },
+  {
+    id: "5",
+    fromName: "Support",
+    from: "support@helpdesk.io",
+    subject: "Ticket #7842 – Your request has been resolved",
+    body: `Hello,
+
+Your support ticket #7842 has been resolved.
+
+Summary: Password reset and 2FA setup completed successfully.
+
+If you have any further questions, reply to this email or open a new ticket.
+
+Thank you for contacting us.
+
+Customer Support
+helpdesk.io`
+  },
+  {
+    id: "6",
+    fromName: "Billing",
+    from: "billing@payments.example.com",
+    subject: "Invoice INV-2024-0892 – Payment received",
+    body: `Dear Customer,
+
+We have received your payment of $149.00 for Invoice INV-2024-0892.
+
+Payment method: Credit card ending in 4242
+Date: January 28, 2025
+
+You can download your receipt and invoice from the billing portal. If you have any questions about this invoice, contact our billing team.
+
+Thank you for your business.
+
+Billing Department`
+  },
+  {
+    id: "7",
+    fromName: "Notifications",
+    from: "notifications@socialapp.com",
+    subject: "Alex commented on your post",
+    body: `Hi,
+
+Alex Johnson commented on your post: "Great point! I'd add that we should also consider the timeline."
+
+View the conversation and reply here: [link]
+
+You can manage notification preferences in your account settings.
+
+— The SocialApp Team`
+  },
+  {
+    id: "8",
+    fromName: "Mike Wilson",
+    from: "mike.wilson@gmail.com",
+    subject: "Re: Weekend plans?",
+    body: `Hey!
+
+Just checking in – are we still on for Saturday? I was thinking we could do the hike in the morning and then grab lunch downtown.
+
+Let me know what works for you.
+
+Mike`
+  },
+  {
+    id: "9",
+    fromName: "Account Security",
+    from: "noreply@secure-login.xyz",
+    subject: "Urgent: Verify your account now",
+    body: `Your account has been flagged for unusual activity. Verify your identity immediately to avoid suspension.
+
+Click here to verify: [link]
+
+This is an automated message. Do not reply.`
+  },
+  {
+    id: "10",
+    fromName: "HR Team",
+    from: "hr@company.com",
+    subject: "Open enrollment – benefits and 401(k)",
+    body: `Hello everyone,
+
+Open enrollment for benefits and 401(k) runs from February 1–15.
+
+Please review the attached guide and submit your elections in the HR portal by the deadline. If you have questions, join our drop-in sessions on Feb 5 and 12.
+
+Best,
+Human Resources`
   }
 ]
 
@@ -222,7 +326,7 @@ export function InteractiveDemo() {
   const [formLabel, setFormLabel] = useState("")
   const [formPrompt, setFormPrompt] = useState("")
   const [enabledDeterministicRules, setEnabledDeterministicRules] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(DETERMINISTIC_RULE_NAMES.map(n => [n, DEFAULT_DETERMINISTIC_RULES[n]]))
+    () => Object.fromEntries(DETERMINISTIC_RULE_NAMES.map(n => [n, false]))
   )
   const [deterministicLabelsByFrom, setDeterministicLabelsByFrom] = useState<Record<string, string[]>>({})
   const [deterministicLoading, setDeterministicLoading] = useState(false)
@@ -417,14 +521,17 @@ export function InteractiveDemo() {
           </p>
         </div>
 
-        <div className="grid gap-8" style={{ gridTemplateColumns: "30% 70%" }}>
+        <div className="grid items-stretch gap-8" style={{ gridTemplateColumns: "30% 70%" }}>
           {/* Left Side - Labels sidebar */}
-          <div>
-            <Card className="p-6 h-full">
+          <div className="min-h-0 min-w-0">
+            <Card className="p-6 h-full min-w-0 overflow-x-hidden">
               {/* Labels section */}
               <div className="mb-4">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Labels</h3>
+                  <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  <h3 className="text-lg font-semibold"> AI Labels</h3>
+                  </div>
                   {!isFormOpen && (
                     <Button
                       variant="ghost"
@@ -510,31 +617,46 @@ export function InteractiveDemo() {
               </div>
 
               {/* Deterministic rules section */}
-              <div className="border-t border-border pt-4">
+              <div className="border-t border-border pt-4 min-w-0 overflow-x-hidden">
                 <h3 className="mb-3 text-lg font-semibold">Rules</h3>
-                <div className="rules-list-thin-scrollbar max-h-64 space-y-2 overflow-y-auto">
-                  {DETERMINISTIC_RULE_NAMES.map((ruleName) => (
-                    <label
-                      key={ruleName}
-                      className="flex cursor-pointer items-center gap-2 text-sm"
-                    >
-                      <Checkbox
-                        checked={enabledDeterministicRules[ruleName] ?? false}
-                        onCheckedChange={(checked) =>
-                          setDeterministicRuleEnabled(ruleName, checked === true)
-                        }
-                      />
-                      <span>{formatDeterministicRuleName(ruleName)}</span>
-                    </label>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Expand a group to enable rules.
+                </p>
+                <Accordion type="multiple" className="rules-list-thin-scrollbar max-h-64 overflow-x-hidden overflow-y-auto">
+                  {DETERMINISTIC_RULE_GROUPS.map((group) => (
+                    <AccordionItem key={group.title} value={group.title} className="border-none min-w-0">
+                      <AccordionTrigger className="py-2 text-sm font-medium hover:no-underline [&>span]:min-w-0 [&>span]:truncate">
+                        {group.title}
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-2 pt-0">
+                        <div className="space-y-2 min-w-0">
+                          {group.rules.map((ruleName) => (
+                            <label
+                              key={ruleName}
+                              className="flex cursor-pointer items-center gap-2 text-sm min-w-0"
+                            >
+                              <Checkbox
+                                checked={enabledDeterministicRules[ruleName] ?? false}
+                                onCheckedChange={(checked) =>
+                                  setDeterministicRuleEnabled(ruleName, checked === true)
+                                }
+                                className="shrink-0"
+                              />
+                              <span className="min-w-0 truncate">{formatDeterministicRuleName(ruleName)}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
                   ))}
-                </div>
+                </Accordion>
               </div>
             </Card>
           </div>
 
           {/* Right Side - Gmail-style Email List */}
-          <div>
-            <Card className="p-6">
+          <div className="min-h-0">
+            <Card className="p-6 h-full">
               <h3 className="mb-4 text-lg font-semibold">Inbox</h3>
               
               <div className="space-y-0 divide-y divide-border">
