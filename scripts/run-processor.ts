@@ -7,6 +7,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { config } from 'dotenv';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { getGeminiApiKey } from '../lib/secrets';
 
 interface GoogleCreds {
   web?: {
@@ -203,14 +204,8 @@ async function test(): Promise<void> {
     
     console.log(`✅ Refresh token fetched (length: ${gmailRefreshToken.length} chars)`);
 
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    if (!geminiApiKey) {
-      throw new Error(
-        '❌ Missing Gemini API key!\n\n' +
-        'Set GEMINI_API_KEY environment variable\n' +
-        'Get your key from: https://makersuite.google.com/app/apikey'
-      );
-    }
+    // Get Gemini API key from environment or AWS Secrets Manager
+    const geminiApiKey = await getGeminiApiKey();
 
     // Get optional parameters (with defaults for test function)
     const googleSheetsUrl = 'https://docs.google.com/spreadsheets/d/1T9vwarXB3ICksZpP4gHw-rllKve0j2tKBDEEEsIVEAM/edit?gid=0#gid=0'
