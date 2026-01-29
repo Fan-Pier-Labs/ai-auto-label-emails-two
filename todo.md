@@ -1,8 +1,8 @@
 # todo list 
 
-- [ ] add a stripe integration
-- [ ] get the gmail oauth integration working and get approval from google so external users can use it.
-- [ ] store the google sheet id and gmail refresh token in stripe
+- [x] add a stripe integration
+- [WIP] get the gmail oauth integration working and get approval from google so external users can use it.
+- [x] store the google sheet id and gmail refresh token in stripe
 - [x] add analytics: just log. just keep track of usage, dont log email contents. eg log (processed 3 emails for user with name X Y and email X@Y.com ). we will run this on fargate so you can just use console.log and it will go to cloudwatch logs.
 - [x] add sentry. enable the session recording and error tracking and log tracking. 
 
@@ -11,7 +11,7 @@ deterministic rules
 
 - [x] add a deterministic rule that checks to see if the domain is registred in the last 3 months. if so call the label new-domain
 - [?] add a deterministic check to see if the domain resolves, and has gmail/etc as the mail provider
-- [ ] we need to support enabling/disabling these deterministic rules in google sheets. here is the sheet i use personally https://docs.google.com/spreadsheets/d/1oRvLEi2uj0ENbJ42EyINLzWcbC92HwGriMq5ejKhXYM/edit?gid=0#gid=0 but we should fill in all the other determnistic rules there too.
+- [WIP] we need to support enabling/disabling these deterministic rules in google sheets. here is the sheet i use personally https://docs.google.com/spreadsheets/d/1oRvLEi2uj0ENbJ42EyINLzWcbC92HwGriMq5ejKhXYM/edit?gid=0#gid=0 but we should fill in all the other determnistic rules there too.
 - [ ] add tests for all the other determnistic rules too (ai can one-shot this)
 
 
