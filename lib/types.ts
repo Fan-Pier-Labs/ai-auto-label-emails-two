@@ -45,3 +45,57 @@ export interface RuleResult {
   matched: boolean;
   reason: string;
 }
+
+export interface DeterministicRuleConfig {
+  ruleName: string;
+  enabled: boolean;
+}
+
+/**
+ * All available deterministic rule names
+ */
+export const DETERMINISTIC_RULE_NAMES = [
+  'first-domain',
+  'first-address',
+  'no-email-domain',
+  'no-email-address',
+  'domain-down',
+  'domain-redirects',
+  'new-domain',
+  'domain-resolves-known-provider',
+  'smtp-gmail',
+  'smtp-msft',
+  'smtp-automation',
+  'smtp-work-email',
+  'smtp-other',
+  'no-spf',
+  'no-dmarc',
+  'has-dkim',
+  'no-txt',
+] as const;
+
+export type DeterministicRuleName = typeof DETERMINISTIC_RULE_NAMES[number];
+
+/**
+ * Default enabled state for each deterministic rule
+ * Rules disabled by default: smtp-gmail, smtp-msft (too noisy for most users)
+ */
+export const DEFAULT_DETERMINISTIC_RULES: Record<DeterministicRuleName, boolean> = {
+  'first-domain': true,
+  'first-address': true,
+  'no-email-domain': true,
+  'no-email-address': true,
+  'domain-down': true,
+  'domain-redirects': true,
+  'new-domain': true,
+  'domain-resolves-known-provider': true,
+  'smtp-gmail': false,      // disabled by default (too common)
+  'smtp-msft': false,       // disabled by default (too common)
+  'smtp-automation': true,
+  'smtp-work-email': true,
+  'smtp-other': true,
+  'no-spf': true,
+  'no-dmarc': true,
+  'has-dkim': true,
+  'no-txt': true,
+};
