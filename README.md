@@ -206,6 +206,13 @@ Meeting        | meeting invitation or scheduling
 Important      | urgent or requires immediate action
 ```
 
+**Deterministic rules (same sheet, columns F, G, H):**
+- **F (Enabled?)**: `yes` or `no` to enable/disable the rule
+- **G (label name)**: Internal rule name (e.g. `domain-down`, `new-domain`, `smtp-gmail`)
+- **H (AI Prompt)**: Optional description (for your reference)
+
+Use one row per deterministic rule you want to override; leave F,G,H empty to use defaults.
+
 **Template Sheet**: [Copy this template](https://docs.google.com/spreadsheets/d/1oRvLEi2uj0ENbJ42EyINLzWcbC92HwGriMq5ejKhXYM/edit)
 
 ### API Endpoint

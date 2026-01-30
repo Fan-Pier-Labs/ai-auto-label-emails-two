@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test';
-import { extractSpreadsheetId } from './sheets';
+import { extractSpreadsheetId, parseDeterministicRulesFromRows } from './sheets';
 
 describe('extractSpreadsheetId', () => {
   test('should return ID when given just an ID', () => {
@@ -45,5 +45,21 @@ describe('extractSpreadsheetId', () => {
 
   test('should handle URL without /d/ path', () => {
     expect(() => extractSpreadsheetId('https://docs.google.com/spreadsheets/')).toThrow();
+  });
+});
+
+describe('parseDeterministicRulesFromRows (columns F,G,H)', () => {
+  test('should parse F,G,H deterministic rules from sheet rows', () => {
+    const lines = [
+      'Label Name,Label Prompt,,,Enabled?,label name,AI Prompt',
+      'Job,Prompt here,,,yes,domain-down,does the domain resolve?',
+      'Other,Other prompt,,,no,smtp-gmail,',
+    ];
+    const rules = parseDeterministicRulesFromRows(lines);
+    expect(rules.length).toBe(2);
+    const domainDown = rules.find(r => r.ruleName === 'domain-down');
+    const smtpGmail = rules.find(r => r.ruleName === 'smtp-gmail');
+    expect(domainDown?.enabled).toBe(true);
+    expect(smtpGmail?.enabled).toBe(false);
   });
 });
