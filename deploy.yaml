@@ -17,6 +17,7 @@ task:
 
 secrets:
   - arn:aws:secretsmanager:us-east-2:555985150976:secret:GEMINI_API_KEY-Wtqpz8
+  - arn:aws:secretsmanager:us-east-2:555985150976:secret:AI_EMAIL_LABELING_APP-lBzZpo
 
 # Required: ecsTaskExecutionRole needs GetSecretValue so the task can read secrets at runtime.
 custom_iam_policy:
