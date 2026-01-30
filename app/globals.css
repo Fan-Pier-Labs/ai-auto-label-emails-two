@@ -124,20 +124,21 @@
   }
 }
 
-/* Very thin scrollbar for rules list and similar */
+/* Slim scrollbars: same width (6px) for all demo scroll areas */
 .rules-list-thin-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: oklch(0.45 0 0 / 0.4) transparent;
 }
 .rules-list-thin-scrollbar::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
+  height: 6px;
 }
 .rules-list-thin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 .rules-list-thin-scrollbar::-webkit-scrollbar-thumb {
   background: oklch(0.45 0 0 / 0.4);
-  border-radius: 4px;
+  border-radius: 3px;
 }
 .rules-list-thin-scrollbar::-webkit-scrollbar-thumb:hover {
   background: oklch(0.45 0 0 / 0.6);
@@ -150,4 +151,33 @@
 }
 .dark .rules-list-thin-scrollbar::-webkit-scrollbar-thumb:hover {
   background: oklch(0.708 0 0 / 0.6);
+}
+
+/* Hide scrollbars but keep scroll behavior (interactive demo) */
+.scrollbar-hide,
+#demo .scrollbar-hide,
+#demo [class*="overflow-y-auto"],
+#demo [class*="overflow-auto"],
+#demo [data-demo-scroll] {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.scrollbar-hide::-webkit-scrollbar,
+#demo .scrollbar-hide::-webkit-scrollbar,
+#demo [class*="overflow-y-auto"]::-webkit-scrollbar,
+#demo [class*="overflow-auto"]::-webkit-scrollbar,
+#demo [data-demo-scroll]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+.scrollbar-hide::-webkit-scrollbar-track,
+.scrollbar-hide::-webkit-scrollbar-thumb,
+#demo [data-demo-scroll]::-webkit-scrollbar-track,
+#demo [data-demo-scroll]::-webkit-scrollbar-thumb {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
 }
