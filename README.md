@@ -208,10 +208,10 @@ Important      | urgent or requires immediate action
 
 **Deterministic rules (same sheet, columns F, G, H):**
 - **F (Enabled?)**: `yes` or `no` to enable/disable the rule
-- **G (label name)**: Internal rule name (e.g. `domain-down`, `new-domain`, `smtp-gmail`)
-- **H (AI Prompt)**: Optional description (for your reference)
+- **G (Label)**: Any label name you want (e.g. `likely-scam`, `phishing-risk`)
+- **H (AI Prompt)**: Question the AI answers using deterministic check results (e.g. "can it be a scam domain?")
 
-Use one row per deterministic rule you want to override; leave F,G,H empty to use defaults.
+Only rows with **non-empty label and prompt** are used. The system runs all deterministic checks (domain, DNS, MX, etc.) once per email, then for each enabled row the AI decides from those results whether to apply the label. Each row is one Gemini call per email.
 
 **Template Sheet**: [Copy this template](https://docs.google.com/spreadsheets/d/1oRvLEi2uj0ENbJ42EyINLzWcbC92HwGriMq5ejKhXYM/edit)
 

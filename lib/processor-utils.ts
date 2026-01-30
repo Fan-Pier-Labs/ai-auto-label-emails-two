@@ -15,9 +15,11 @@ import { promises as dns } from 'dns';
 import { lookup as whoisLookup } from 'whois';
 import { createConnection } from 'net';
 import { withRetry } from './retry';
+import { initializeGmail } from './gmail';
+import { initializeGemini } from './gemini';
 import { fetchRulesFromSheet, fetchDeterministicRulesConfig, extractSpreadsheetId } from './sheets';
-import type { Email, LabelRule, RuleResult, DeterministicRuleName } from './types';
-import { DEFAULT_DETERMINISTIC_RULES } from './types';
+import { applyDeterministicLabels as applyDeterministicLabelsLib } from './deterministic';
+import type { Email, LabelRule, RuleResult, DeterministicRuleConfig } from './types';
 
 // ============================================================================
 // Types
@@ -66,7 +68,7 @@ export class ProcessingSession {
   private oauth2Client: OAuth2Client | null = null;
   private geminiClient: GoogleGenerativeAI | null = null;
   private aiRules: LabelRule[] = [];
-  private deterministicRulesConfig: Record<DeterministicRuleName, boolean> = {} as Record<DeterministicRuleName, boolean>;
+  private deterministicRuleConfigs: DeterministicRuleConfig[] = [];
   private rulesLoaded = false;
 
   // Domain caches
@@ -107,11 +109,15 @@ export class ProcessingSession {
       throw error;
     }
 
+    // Set global Gmail client so deterministic rules (hasReceivedFromDomain, etc.) can use it
+    await initializeGmail(this.config.gmail);
+
     // Initialize Gemini client
     if (!this.config.geminiApiKey) {
       throw new Error('Gemini API key is required');
     }
     this.geminiClient = new GoogleGenerativeAI(this.config.geminiApiKey);
+    await initializeGemini(this.config.geminiApiKey);
     console.log('[Session] Gemini client initialized');
 
     // Load rules from Google Sheets (once)
@@ -136,13 +142,8 @@ export class ProcessingSession {
       ]);
 
       this.aiRules = aiRules;
+      this.deterministicRuleConfigs = detRulesConfig;
       console.log(`[Session] Loaded ${this.aiRules.length} AI rules`);
-
-      // Convert to Record
-      for (const rule of detRulesConfig) {
-        this.deterministicRulesConfig[rule.ruleName as DeterministicRuleName] = rule.enabled;
-      }
-
       const enabledCount = detRulesConfig.filter(r => r.enabled).length;
       console.log(`[Session] Loaded ${detRulesConfig.length} deterministic rules (${enabledCount} enabled)`);
 
@@ -592,88 +593,11 @@ Does this email CLEARLY match the rule? Respond with JSON only:
   }
 
   // ==========================================================================
-  // Deterministic Labeling (with caching)
+  // Deterministic Labeling (delegate to lib/deterministic)
   // ==========================================================================
 
-  private isRuleEnabled(ruleName: DeterministicRuleName): boolean {
-    if (ruleName in this.deterministicRulesConfig) {
-      return this.deterministicRulesConfig[ruleName];
-    }
-    return DEFAULT_DETERMINISTIC_RULES[ruleName] ?? true;
-  }
-
-  async applyDeterministicLabels(email: Email): Promise<{ labels: string[]; results: RuleResult[] }> {
-    const labels: string[] = [];
-    const results: RuleResult[] = [];
-
-    const addResult = (ruleName: DeterministicRuleName, matched: boolean, reason: string) => {
-      const enabled = this.isRuleEnabled(ruleName);
-      if (matched && enabled) {
-        labels.push(ruleName);
-      }
-      results.push({
-        ruleName,
-        matched: matched && enabled,
-        reason: enabled ? reason : `[DISABLED] ${reason}`,
-      });
-    };
-
-    // History-based rules
-    const hasSeenDomain = await this.hasReceivedFromDomain(email.fromDomain, email.id);
-    addResult('first-domain', !hasSeenDomain, hasSeenDomain ? `Previously seen ${email.fromDomain}` : `First from ${email.fromDomain}`);
-
-    const hasSeenAddress = await this.hasReceivedFromAddress(email.fromAddress, email.id);
-    addResult('first-address', !hasSeenAddress, hasSeenAddress ? `Previously seen ${email.fromAddress}` : `First from ${email.fromAddress}`);
-
-    if (email.toDomains.length > 0) {
-      const sentChecks = await Promise.all(email.toDomains.map(d => this.hasSentToDomain(d)));
-      const neverSent = !sentChecks.some(Boolean);
-      addResult('no-email-domain', neverSent, neverSent ? `Never sent to ${email.toDomains.join(', ')}` : `Sent to ${email.toDomains.join(', ')}`);
-    }
-
-    if (email.toAddresses.length > 0) {
-      const sentChecks = await Promise.all(email.toAddresses.map(a => this.hasSentToAddress(a)));
-      const neverSent = !sentChecks.some(Boolean);
-      addResult('no-email-address', neverSent, neverSent ? `Never sent to ${email.toAddresses.join(', ')}` : `Sent to ${email.toAddresses.join(', ')}`);
-    }
-
-    // Domain-based rules (using cached lookups)
-    if (email.fromDomain) {
-      // Domain status
-      const status = await this.getDomainStatus(email.fromDomain);
-      addResult('domain-down', status.isDown, status.isDown ? `Domain ${email.fromDomain} is down` : `Domain ${email.fromDomain} is accessible`);
-
-      if (status.redirectsToDifferentDomain && email.fromDomain.toLowerCase() !== 'gmail.com') {
-        addResult('domain-redirects', true, `Domain ${email.fromDomain} redirects to ${status.redirectTargetDomain}`);
-      } else {
-        addResult('domain-redirects', false, `Domain ${email.fromDomain} does not redirect`);
-      }
-
-      // MX records (single lookup, multiple rules)
-      const mx = await this.getMXRecords(email.fromDomain);
-      const mxStr = mx.records?.join(', ') || 'none';
-
-      addResult('smtp-gmail', mx.provider === 'gmail', `MX: ${mxStr}`);
-      addResult('smtp-msft', mx.provider === 'msft', `MX: ${mxStr}`);
-      addResult('smtp-automation', mx.provider === 'automation', `MX: ${mxStr}`);
-      addResult('smtp-work-email', mx.provider === 'work-email', `MX: ${mxStr}`);
-      addResult('smtp-other', mx.provider === 'other', `MX: ${mxStr}`);
-
-      // Domain resolves with known provider
-      const resolves = await this.checkDomainResolves(email.fromDomain);
-      const hasKnownProvider = mx.provider !== null && mx.provider !== 'other';
-      addResult('domain-resolves-known-provider', resolves && hasKnownProvider, 
-        resolves ? `Resolves, provider: ${mx.provider}` : 'Does not resolve');
-
-      // TXT records (single lookup, multiple rules)
-      const txt = await this.getTXTRecords(email.fromDomain);
-      addResult('no-spf', !txt.hasSPF, txt.hasSPF ? 'Has SPF' : 'No SPF record');
-      addResult('no-dmarc', !txt.hasDMARC, txt.hasDMARC ? 'Has DMARC' : 'No DMARC record');
-      addResult('has-dkim', txt.hasDKIM, txt.hasDKIM ? 'Has DKIM' : 'No DKIM detected');
-      addResult('no-txt', !txt.hasTXT, txt.hasTXT ? 'Has TXT records' : 'No TXT records');
-    }
-
-    return { labels, results };
+  async applyDeterministicLabels(email: Email, options?: { skipHistoryRules?: boolean }): Promise<{ labels: string[]; results: RuleResult[] }> {
+    return applyDeterministicLabelsLib(email, this.deterministicRuleConfigs, options);
   }
 
   // ==========================================================================

@@ -91,21 +91,16 @@ describe('applyDeterministicLabels (with mocks)', () => {
     labels: [],
   };
 
-  test('returns results for all deterministic rules when skipHistoryRules is true', async () => {
-    const { labels, results } = await applyDeterministicLabels(baseEmail, undefined, {
+  test('returns check results when ruleConfigs is empty (no AI rules)', async () => {
+    const { labels, results } = await applyDeterministicLabels(baseEmail, [], {
       skipHistoryRules: true,
     });
 
+    expect(labels).toEqual([]);
     const ruleNames = results.map((r) => r.ruleName);
     expect(ruleNames).toContain('domain-down');
     expect(ruleNames).toContain('domain-redirects');
     expect(ruleNames).toContain('new-domain');
-    expect(ruleNames).toContain('domain-resolves-known-provider');
-    expect(ruleNames).toContain('smtp-gmail');
-    expect(ruleNames).toContain('smtp-msft');
-    expect(ruleNames).toContain('smtp-automation');
-    expect(ruleNames).toContain('smtp-work-email');
-    expect(ruleNames).toContain('smtp-other');
     expect(ruleNames).toContain('no-spf');
     expect(ruleNames).toContain('no-dmarc');
     expect(ruleNames).toContain('has-dkim');
@@ -120,50 +115,13 @@ describe('applyDeterministicLabels (with mocks)', () => {
     });
   });
 
-  test('respects enabledRules: disabled rule does not add label', async () => {
-    const enabledRules = {
-      'first-domain': true,
-      'first-address': true,
-      'no-email-domain': true,
-      'no-email-address': true,
-      'domain-down': true,
-      'domain-redirects': true,
-      'new-domain': true,
-      'domain-resolves-known-provider': true,
-      'smtp-gmail': false,
-      'smtp-msft': false,
-      'smtp-automation': true,
-      'smtp-work-email': true,
-      'smtp-other': true,
-      'no-spf': false,
-      'no-dmarc': false,
-      'has-dkim': true,
-      'no-txt': true,
-    } as const;
-
-    const { labels, results } = await applyDeterministicLabels(baseEmail, enabledRules, {
-      skipHistoryRules: true,
-    });
-
-    const noSpfResult = results.find((r) => r.ruleName === 'no-spf');
-    expect(noSpfResult).toBeDefined();
-    expect(noSpfResult!.reason).toMatch(/\[DISABLED\]/);
-
-    const smtpGmailResult = results.find((r) => r.ruleName === 'smtp-gmail');
-    expect(smtpGmailResult).toBeDefined();
-    expect(smtpGmailResult!.reason).toMatch(/\[DISABLED\]/);
-
-    expect(labels).not.toContain('no-spf');
-    expect(labels).not.toContain('smtp-gmail');
-  });
-
-  test('email with empty fromDomain returns no domain-rule results when skipHistoryRules is true', async () => {
+  test('email with empty fromDomain returns no check results when skipHistoryRules is true', async () => {
     const emailNoDomain: Email = {
       ...baseEmail,
       fromDomain: '',
       fromAddress: 'user@',
     };
-    const { labels, results } = await applyDeterministicLabels(emailNoDomain, undefined, {
+    const { labels, results } = await applyDeterministicLabels(emailNoDomain, [], {
       skipHistoryRules: true,
     });
 

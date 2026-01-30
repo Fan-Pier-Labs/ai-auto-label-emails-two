@@ -3,7 +3,7 @@ import { initializeGemini, applyAILabels } from './ai-labeler';
 import { applyDeterministicLabels } from './deterministic';
 import { fetchRulesFromSheet, fetchDeterministicRulesConfig, extractSpreadsheetId } from './sheets';
 import type { GmailConfig } from './gmail';
-import type { DeterministicRuleName } from './types';
+import type { DeterministicRuleConfig } from './types';
 
 export interface ProcessorConfig {
   gmail: GmailConfig;
@@ -31,32 +31,24 @@ export async function processEmail(
 
     // Load rules from Google Sheets (every time, no caching)
     let rules: any[] = [];
-    let deterministicRulesConfig: Record<DeterministicRuleName, boolean> | undefined;
-    
+    let detRulesConfig: DeterministicRuleConfig[] = [];
+
     if (config.googleSheetsUrl) {
       try {
         const spreadsheetId = extractSpreadsheetId(config.googleSheetsUrl);
-        
-        // Load AI rules and deterministic rules config in parallel
-        const [aiRules, detRulesConfig] = await Promise.all([
+
+        const [aiRules, detConfig] = await Promise.all([
           fetchRulesFromSheet(spreadsheetId),
           fetchDeterministicRulesConfig(spreadsheetId),
         ]);
-        
+
         rules = aiRules;
+        detRulesConfig = detConfig;
         console.log(`[Rules] Loaded ${rules.length} AI rules from Google Sheets`);
-        
-        // Convert array to Record for the deterministic function
-        deterministicRulesConfig = {} as Record<DeterministicRuleName, boolean>;
-        for (const rule of detRulesConfig) {
-          deterministicRulesConfig[rule.ruleName as DeterministicRuleName] = rule.enabled;
-        }
-        
         const enabledCount = detRulesConfig.filter(r => r.enabled).length;
         console.log(`[Rules] Loaded ${detRulesConfig.length} deterministic rules config (${enabledCount} enabled)`);
       } catch (error) {
         console.error('[Rules] Failed to load rules from Google Sheets:', error);
-        // Continue without rules rather than failing
       }
     }
 
@@ -68,9 +60,9 @@ export async function processEmail(
 
     const allLabels: string[] = [];
 
-    // Apply deterministic labels (uses Gmail search, no history needed)
+    // Apply deterministic labels (run checks, then AI per rule config)
     console.log('Deterministic Rules:');
-    const deterministicResult = await applyDeterministicLabels(email, deterministicRulesConfig);
+    const deterministicResult = await applyDeterministicLabels(email, detRulesConfig);
     allLabels.push(...deterministicResult.labels);
     
     // Display all deterministic rule results

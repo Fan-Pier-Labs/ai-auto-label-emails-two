@@ -1,6 +1,5 @@
-import type { LabelRule, DeterministicRuleConfig, DeterministicRuleName } from './types';
+import type { LabelRule, DeterministicRuleConfig } from './types';
 import { withRetry } from './retry';
-import { DEFAULT_DETERMINISTIC_RULES, DETERMINISTIC_RULE_NAMES } from './types';
 
 /**
  * Parse a CSV line respecting quoted fields (handles commas inside quotes).
@@ -100,7 +99,8 @@ function findDeterministicColumnIndices(headerParts: string[]): { enabled: numbe
 
 /**
  * Parse deterministic rule config from main sheet rows (columns F, G, H).
- * F = Enabled?, G = label name (rule name), H = AI Prompt (optional description).
+ * F = Enabled?, G = label (any string), H = AI Prompt (required).
+ * Only rows with non-empty label and prompt are included.
  * Column indices are detected from the header row.
  * Exported for tests and for parsing example CSV files.
  */
@@ -116,14 +116,10 @@ export function parseDeterministicRulesFromRows(lines: string[]): DeterministicR
     if (!line) continue;
     const parts = parseCsvLine(line);
     const enabledStr = parts[cols.enabled]?.trim().toLowerCase() ?? '';
-    const ruleName = parts[cols.labelName]?.trim().toLowerCase() ?? '';
+    const label = parts[cols.labelName]?.trim() ?? '';
+    const prompt = parts[cols.aiPrompt]?.trim() ?? '';
 
-    if (!ruleName) continue;
-
-    if (!DETERMINISTIC_RULE_NAMES.includes(ruleName as DeterministicRuleName)) {
-      console.log(`[Sheets] Unknown deterministic rule: ${ruleName}, skipping`);
-      continue;
-    }
+    if (!label || !prompt) continue;
 
     const enabled =
       enabledStr === 'true' ||
@@ -132,7 +128,7 @@ export function parseDeterministicRulesFromRows(lines: string[]): DeterministicR
       enabledStr === 'on' ||
       enabledStr === 'y';
 
-    rules.push({ ruleName: ruleName as DeterministicRuleName, enabled });
+    rules.push({ label, enabled, prompt });
   }
   return rules;
 }
@@ -162,9 +158,9 @@ export function extractSpreadsheetId(urlOrId: string): string {
 
 /**
  * Fetch deterministic rules configuration from Google Sheets.
- * Reads columns F (Enabled?), G (label name), H (AI Prompt) from the main sheet
+ * Reads columns F (Enabled?), G (label), H (AI Prompt) from the main sheet
  * (same sheet as AI rules). No separate tab is used.
- * Returns array of DeterministicRuleConfig with merged defaults.
+ * Returns parsed rows only; rows with empty label or prompt are skipped. Empty sheet returns [].
  */
 export async function fetchDeterministicRulesConfig(spreadsheetId: string): Promise<DeterministicRuleConfig[]> {
   const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
@@ -180,32 +176,18 @@ export async function fetchDeterministicRulesConfig(spreadsheetId: string): Prom
     );
     const lines = response.trim().split('\n');
     const rules = parseDeterministicRulesFromRows(lines);
-
-    // Merge with defaults - sheet values override defaults; last row wins for same rule
-    const result: DeterministicRuleConfig[] = [];
-    for (const ruleName of DETERMINISTIC_RULE_NAMES) {
-      const sheetRule = [...rules].reverse().find(r => r.ruleName === ruleName);
-      const enabled =
-        sheetRule !== undefined ? sheetRule.enabled : DEFAULT_DETERMINISTIC_RULES[ruleName];
-      result.push({ ruleName, enabled });
-    }
-
-    const loadedCount = rules.length;
-    const enabledCount = result.filter(r => r.enabled).length;
-    console.log(`[Sheets] Loaded ${loadedCount} deterministic rule configs from columns F,G,H (${enabledCount} enabled)`);
-    return result;
+    const enabledCount = rules.filter(r => r.enabled).length;
+    console.log(`[Sheets] Loaded ${rules.length} deterministic rule configs from columns F,G,H (${enabledCount} enabled)`);
+    return rules;
   } catch (error) {
     console.error('[Sheets] Error fetching deterministic rules config:', error);
-    return DETERMINISTIC_RULE_NAMES.map(ruleName => ({
-      ruleName,
-      enabled: DEFAULT_DETERMINISTIC_RULES[ruleName],
-    }));
+    return [];
   }
 }
 
 /**
- * Get enabled deterministic rule names as a Set for quick lookup
+ * Get enabled deterministic rule labels as a Set for quick lookup
  */
 export function getEnabledDeterministicRules(config: DeterministicRuleConfig[]): Set<string> {
-  return new Set(config.filter(r => r.enabled).map(r => r.ruleName));
+  return new Set(config.filter(r => r.enabled).map(r => r.label));
 }
