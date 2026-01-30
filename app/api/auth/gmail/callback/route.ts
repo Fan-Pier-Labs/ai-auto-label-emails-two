@@ -80,10 +80,7 @@ export async function GET(request: NextRequest) {
 
     const { clientId, clientSecret } = getOAuthCredentials();
 
-    // Get the base URL for the callback
-    const protocol = request.headers.get('x-forwarded-proto') || 'http';
-    const host = request.headers.get('host') || 'localhost:3000';
-    const redirectUri = `${protocol}://${host}/api/auth/gmail/callback`;
+    const redirectUri = `${process.env.NEXT_APP_URL}/api/auth/gmail/callback`;
 
     // Create OAuth2 client
     const oauth2Client = new google.auth.OAuth2(
