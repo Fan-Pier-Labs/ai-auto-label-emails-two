@@ -14,7 +14,7 @@ import { createConnection } from 'net';
  * Extract the base domain from a domain string (e.g., "mail.example.com" -> "example.com")
  * This is a simple implementation - for production, consider using a proper domain parsing library
  */
-function getBaseDomain(domain: string): string {
+export function getBaseDomain(domain: string): string {
   const parts = domain.split('.');
   if (parts.length <= 2) {
     return domain;
@@ -45,7 +45,7 @@ async function lookupMX(domain: string): Promise<string[] | null> {
  * Returns null only if MX lookup failed (no records found)
  * Returns 'other' if MX records exist but don't match any known category
  */
-function categorizeSMTPProvider(mxRecords: string[] | null): 'gmail' | 'msft' | 'automation' | 'work-email' | 'other' | null {
+export function categorizeSMTPProvider(mxRecords: string[] | null): 'gmail' | 'msft' | 'automation' | 'work-email' | 'other' | null {
   if (!mxRecords || mxRecords.length === 0) {
     return null;
   }
