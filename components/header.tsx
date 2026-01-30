@@ -17,13 +17,13 @@ export function Header() {
         
         <nav className="hidden items-center gap-6 md:flex">
           <Link 
-            href="#features" 
+            href="/#features" 
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             Features
           </Link>
           <Link 
-            href="#options" 
+            href="/#options" 
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             Get Started
@@ -38,7 +38,7 @@ export function Header() {
         </nav>
 
         <Button asChild size="sm">
-          <Link href="#options">Get Started</Link>
+          <Link href="/#options">Get Started</Link>
         </Button>
       </div>
     </header>

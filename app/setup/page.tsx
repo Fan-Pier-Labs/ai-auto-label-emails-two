@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { SetupForm } from "@/components/setup-form";
@@ -12,23 +11,20 @@ export default async function SetupPage() {
 
   if (!setupEmail) {
     return (
-      <main className="min-h-screen bg-background flex flex-col">
-        <Header />
-        <div className="flex-1 flex items-center justify-center px-6 py-8">
-          <Alert className="max-w-lg">
-            <Mail className="h-4 w-4" />
-            <AlertTitle>Complete Gmail sign-in first</AlertTitle>
-            <AlertDescription className="mt-2">
-              Connect your Gmail account to link your rules sheet and start auto-labeling.
-            </AlertDescription>
-            <div className="mt-4">
-              <Button asChild>
-                <Link href="/api/auth/gmail">Connect Gmail</Link>
-              </Button>
-            </div>
-          </Alert>
-        </div>
-      </main>
+      <div className="flex-1 flex items-center justify-center px-6 py-8">
+        <Alert className="max-w-lg">
+          <Mail className="h-4 w-4" />
+          <AlertTitle>Complete Gmail sign-in first</AlertTitle>
+          <AlertDescription className="mt-2">
+            Connect your Gmail account to link your rules sheet and start auto-labeling.
+          </AlertDescription>
+          <div className="mt-4">
+            <Button asChild>
+              <Link href="/api/auth/gmail">Connect Gmail</Link>
+            </Button>
+          </div>
+        </Alert>
+      </div>
     );
   }
 

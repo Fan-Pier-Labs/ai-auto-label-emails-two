@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Header } from "@/components/header";
 import {
   Card,
   CardContent,
@@ -65,9 +64,7 @@ export function SetupForm() {
   const isLoading = status === "saving" || status === "redirecting";
 
   return (
-    <main className="min-h-screen bg-background flex flex-col">
-      <Header />
-      <div className="flex-1 flex items-center justify-center px-6 py-8">
+    <div className="flex-1 flex items-center justify-center px-6 py-8">
         <Card className="w-full max-w-lg">
           <CardHeader className="pb-4">
             <CardTitle className="flex items-center gap-2 text-xl">
@@ -156,6 +153,5 @@ export function SetupForm() {
           </CardContent>
         </Card>
       </div>
-    </main>
   );
 }
