@@ -18,8 +18,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body className="min-h-screen flex flex-col bg-background">
+    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable} overflow-x-hidden`}>
+      <body className="min-h-screen flex flex-col bg-background overflow-x-hidden max-w-[100vw]">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

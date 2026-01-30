@@ -330,38 +330,38 @@ export function InteractiveDemo() {
   }, [rules, isFormOpen])
 
   return (
-    <section id="demo" className="px-6 py-24 bg-muted/30">
-      <div className="w-full max-w-7xl mx-auto">
-        <div className="mb-12 text-center">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground">
+    <section id="demo" className="px-4 sm:px-6 py-8 sm:py-24 bg-muted/30 overflow-hidden max-w-[100vw]">
+      <div className="w-full max-w-7xl mx-auto overflow-hidden box-border">
+        <div className="mb-6 sm:mb-12 text-center">
+          <div className="mb-3 sm:mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-sm text-muted-foreground">
             <Sparkles className="h-4 w-4" />
             <span>Try It Live</span>
           </div>
-          <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">
+          <h2 className="mb-2 sm:mb-4 text-2xl sm:text-3xl font-bold text-foreground md:text-4xl">
             Interactive Demo
           </h2>
-          <p className="mx-auto max-w-2xl text-muted-foreground">
+          <p className="mx-auto max-w-2xl text-sm sm:text-base text-muted-foreground">
             Configure labels and select an email to see classification in real-time.
           </p>
         </div>
 
-        <div className="grid gap-8 h-[520px]" style={{ gridTemplateColumns: "30% 70%" }}>
+        <div className="grid gap-4 lg:gap-8 lg:grid-cols-[3fr_7fr] lg:h-[520px] w-full max-w-full overflow-hidden">
           {/* Left Side - Labels sidebar */}
-          <div className="min-h-0 min-w-0 flex flex-col h-full">
-            <Card className="p-6 min-w-0 overflow-hidden min-h-0 flex-1 h-full flex flex-col">
+          <div className="min-h-0 min-w-0 w-full max-w-full flex flex-col h-auto lg:h-full overflow-hidden box-border">
+            <Card className="p-3 sm:p-6 min-w-0 w-full max-w-full overflow-hidden min-h-0 flex-1 flex flex-col max-h-[320px] sm:max-h-[400px] lg:max-h-none lg:h-full box-border">
               {/* Labels section */}
-              <div className="mb-4 shrink-0">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  <h3 className="text-lg font-semibold"> AI Labels</h3>
+              <div className="mb-2 sm:mb-4 shrink-0 w-full overflow-hidden">
+                <div className="mb-2 sm:mb-4 flex items-center justify-between w-full">
+                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                  <Sparkles className="h-4 w-4 shrink-0" />
+                  <h3 className="text-sm sm:text-lg font-semibold truncate">AI Labels</h3>
                   </div>
                   {!isFormOpen && (
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={openAddForm}
-                      className="h-8 w-8 cursor-pointer"
+                      className="h-8 w-8 cursor-pointer shrink-0"
                       aria-label="Add label"
                     >
                       <Plus className="h-4 w-4" />
@@ -370,12 +370,12 @@ export function InteractiveDemo() {
                 </div>
 
                 {isFormOpen ? (
-                  <div className="space-y-3 rounded-lg border border-border p-3">
+                  <div className="space-y-2 sm:space-y-3 rounded-lg border border-border p-2 sm:p-3 w-full">
                     <Input
                       value={formLabel}
                       onChange={(e) => setFormLabel(e.target.value)}
                       placeholder="Enter label name"
-                      className="h-8 text-sm"
+                      className="h-7 sm:h-8 text-xs sm:text-sm w-full"
                     />
                     <Textarea
                       value={formPrompt}
@@ -385,29 +385,29 @@ export function InteractiveDemo() {
                         e.target.style.height = `${e.target.scrollHeight}px`
                       }}
                       placeholder="Enter label prompt"
-                      className="min-h-[32px] text-sm resize-none overflow-hidden"
+                      className="min-h-[28px] sm:min-h-[32px] text-xs sm:text-sm resize-none overflow-hidden w-full"
                       rows={2}
                     />
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={closeForm} className="cursor-pointer">
+                    <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+                      <Button variant="outline" size="sm" onClick={closeForm} className="cursor-pointer h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3">
                         Cancel
                       </Button>
-                      <Button size="sm" onClick={saveForm} className="cursor-pointer">
+                      <Button size="sm" onClick={saveForm} className="cursor-pointer h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3">
                         Save
                       </Button>
                     </div>
                   </div>
                 ) : (
-                  <div className="max-h-48 overflow-y-auto scrollbar-hide" data-demo-scroll>
-                    <div className="divide-y divide-border">
+                  <div className="max-h-32 sm:max-h-48 overflow-y-auto overflow-x-hidden scrollbar-hide w-full" data-demo-scroll>
+                    <div className="divide-y divide-border w-full">
                       {savedRules.map((rule) => (
                         <div
                           key={rule.id}
-                          className="flex items-center justify-between gap-2 p-2"
+                          className="flex items-center justify-between gap-1 sm:gap-2 py-1 sm:p-2 w-full"
                         >
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="min-w-0 flex-1 truncate text-sm text-foreground cursor-default">
+                              <span className="min-w-0 flex-1 truncate text-xs sm:text-sm text-foreground cursor-default">
                                 {rule.label}
                               </span>
                             </TooltipTrigger>
@@ -420,19 +420,19 @@ export function InteractiveDemo() {
                               variant="ghost"
                               size="icon"
                               onClick={() => openEditForm(rule)}
-                              className="h-8 w-8 cursor-pointer"
+                              className="h-6 w-6 sm:h-8 sm:w-8 cursor-pointer"
                               aria-label="Edit label"
                             >
-                              <Pencil className="h-4 w-4" />
+                              <Pencil className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => removeRule(rule.id)}
-                              className="h-8 w-8 cursor-pointer"
+                              className="h-6 w-6 sm:h-8 sm:w-8 cursor-pointer"
                               aria-label="Delete label"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                           </div>
                         </div>
@@ -443,33 +443,33 @@ export function InteractiveDemo() {
               </div>
 
               {/* Deterministic rules section */}
-              <div className="border-t border-border pt-4 min-w-0 flex flex-col flex-1 min-h-0">
-                <h3 className="mb-3 text-lg font-semibold shrink-0">Rules</h3>
-                <p className="mb-3 text-xs text-muted-foreground shrink-0">
+              <div className="border-t border-border pt-2 sm:pt-4 min-w-0 w-full flex flex-col flex-1 min-h-0 overflow-hidden">
+                <h3 className="mb-1.5 sm:mb-3 text-sm sm:text-lg font-semibold shrink-0">Rules</h3>
+                <p className="mb-1.5 sm:mb-3 text-xs text-muted-foreground shrink-0">
                   Expand a group to enable rules.
                 </p>
-                <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide" data-demo-scroll>
-                  <Accordion type="single" collapsible>
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide w-full" data-demo-scroll>
+                  <Accordion type="single" collapsible className="w-full">
                     {DETERMINISTIC_RULE_GROUPS.map((group) => (
-                      <AccordionItem key={group.title} value={group.title} className="border-none min-w-0">
-                        <AccordionTrigger className="py-2 text-sm font-medium hover:no-underline [&>span]:min-w-0 [&>span]:truncate cursor-pointer">
+                      <AccordionItem key={group.title} value={group.title} className="border-none min-w-0 w-full">
+                        <AccordionTrigger className="py-1.5 sm:py-2 text-xs sm:text-sm font-medium hover:no-underline [&>span]:min-w-0 [&>span]:truncate cursor-pointer w-full">
                           {group.title}
                         </AccordionTrigger>
-                        <AccordionContent className="pb-2 pt-0">
-                          <div className="space-y-2 min-w-0">
+                        <AccordionContent className="pb-1.5 sm:pb-2 pt-0">
+                          <div className="space-y-1.5 sm:space-y-2 min-w-0 w-full">
                             {group.rules.map((ruleName) => (
                               <label
                                 key={ruleName}
-                                className="flex cursor-pointer items-center gap-2 text-sm min-w-0"
+                                className="flex cursor-pointer items-center gap-1.5 sm:gap-2 text-xs sm:text-sm min-w-0 w-full"
                               >
                                 <Checkbox
                                   checked={enabledDeterministicRules[ruleName] ?? false}
                                   onCheckedChange={(checked) =>
                                     setDeterministicRuleEnabled(ruleName, checked === true)
                                   }
-                                  className="shrink-0"
+                                  className="shrink-0 h-3.5 w-3.5 sm:h-4 sm:w-4"
                                 />
-                                <span className="min-w-0 truncate">{formatDeterministicRuleName(ruleName)}</span>
+                                <span className="min-w-0 truncate flex-1">{formatDeterministicRuleName(ruleName)}</span>
                               </label>
                             ))}
                           </div>
@@ -483,31 +483,31 @@ export function InteractiveDemo() {
           </div>
 
           {/* Right Side - Gmail-style Email List */}
-          <div className="min-h-0 flex flex-col h-full">
-            <Card className="p-6 h-full flex flex-col min-h-0">
-              <div className="mb-4 flex items-center justify-between gap-2">
-                <h3 className="text-lg font-semibold">Inbox</h3>
+          <div className="min-h-0 min-w-0 w-full max-w-full flex flex-col h-auto lg:h-full overflow-hidden box-border">
+            <Card className="p-3 sm:p-6 w-full max-w-full flex flex-col min-h-0 h-[400px] sm:h-[450px] lg:h-full overflow-hidden box-border">
+              <div className="mb-2 sm:mb-4 flex items-center justify-between gap-2">
+                <h3 className="text-sm sm:text-lg font-semibold shrink-0">Inbox</h3>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={hasWildEmails ? removeWildEmails : addWildEmails}
-                  className="gap-1.5 cursor-pointer"
+                  className="gap-1 sm:gap-1.5 cursor-pointer text-[10px] sm:text-sm h-7 sm:h-8 px-2 sm:px-3 shrink-0"
                 >
                   {hasWildEmails ? (
                     <>
-                      <Trash2 className="h-4 w-4" />
-                      Remove fun
+                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span>Remove fun</span>
                     </>
                   ) : (
                     <>
-                      <PartyPopper className="h-4 w-4" />
-                      Add wild emails
+                      <PartyPopper className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span>Add wild emails</span>
                     </>
                   )}
                 </Button>
               </div>
 
-              <div className="space-y-0 divide-y divide-border flex-1 min-h-0 overflow-y-auto scrollbar-hide" data-demo-scroll>
+              <div className="space-y-0 divide-y divide-border flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide w-full" data-demo-scroll>
                 {emails.map((email) => {
                     const aiLabels = getEmailLabels(email.id)
                     const detLabels = getDeterministicLabels(email)
@@ -517,33 +517,71 @@ export function InteractiveDemo() {
                     return (
                       <div
                         key={email.id}
-                        className={`cursor-pointer p-3 transition-colors hover:bg-muted/50 ${
+                        className={`cursor-pointer py-1.5 px-2 sm:p-3 transition-colors hover:bg-muted/50 w-full overflow-hidden ${
                           isSelected ? "bg-primary/10 border-l-4 border-l-primary" : ""
                         }`}
                         onClick={() => setSelectedEmail(email)}
                       >
-                        <div className="flex items-center text-sm whitespace-nowrap">
-                          <span className="text-foreground w-[140px] flex-shrink-0">
-                            {email.fromName}
-                          </span>
-                          <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden" style={{ paddingLeft: "1rem" }}>
+                        {/* Mobile layout - compact */}
+                        <div className="sm:hidden w-full overflow-hidden">
+                          <div className="flex items-center justify-between gap-2 w-full mb-0.5">
+                            <span className="text-xs font-medium text-foreground truncate min-w-0">
+                              {email.fromName}
+                            </span>
                             {labels.length > 0 && (
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                {labels.map((label) => (
+                              <div className="flex items-center gap-1 shrink-0">
+                                {labels.slice(0, 2).map((label) => (
                                   <Badge
                                     key={label}
                                     variant="secondary"
-                                    className="text-xs px-1.5 py-0 h-5"
+                                    className="text-[10px] px-1.5 py-0 h-4 whitespace-nowrap"
                                   >
                                     {getLabelDisplayName(label)}
                                   </Badge>
                                 ))}
+                                {labels.length > 2 && (
+                                  <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 shrink-0">
+                                    +{labels.length - 2}
+                                  </Badge>
+                                )}
                               </div>
                             )}
-                            <span className="font-semibold flex-shrink-0">
+                          </div>
+                          <div className="text-xs font-semibold text-foreground truncate w-full">
+                            {email.subject}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate w-full">
+                            {truncateText(email.body, 60)}
+                          </div>
+                        </div>
+                        {/* Desktop layout - horizontal */}
+                        <div className="hidden sm:flex items-center text-sm whitespace-nowrap w-full overflow-hidden">
+                          <span className="text-foreground w-[140px] flex-shrink-0 truncate">
+                            {email.fromName}
+                          </span>
+                          <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden pl-4">
+                            {labels.length > 0 && (
+                              <div className="flex items-center gap-1 flex-shrink-0 max-w-[40%] overflow-hidden">
+                                {labels.slice(0, 3).map((label) => (
+                                  <Badge
+                                    key={label}
+                                    variant="secondary"
+                                    className="text-xs px-1.5 py-0 h-5 truncate max-w-[120px]"
+                                  >
+                                    {getLabelDisplayName(label)}
+                                  </Badge>
+                                ))}
+                                {labels.length > 3 && (
+                                  <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5">
+                                    +{labels.length - 3}
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                            <span className="font-semibold truncate flex-shrink min-w-0">
                               {email.subject}
                             </span>
-                            <span className="text-muted-foreground truncate ml-2">
+                            <span className="text-muted-foreground truncate ml-2 min-w-0">
                               {truncateText(email.body, 60)}
                             </span>
                           </div>
