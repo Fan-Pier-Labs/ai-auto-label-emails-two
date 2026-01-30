@@ -12,3 +12,5 @@ google_creds.json
 
 
 google_creds.json
+# Sentry Config File
+.env.sentry-build-plugin

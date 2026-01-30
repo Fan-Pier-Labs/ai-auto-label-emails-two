@@ -1,4 +1,5 @@
-import type { Email, RuleResult } from './types';
+import type { Email, RuleResult, DeterministicRuleName } from './types';
+import { DEFAULT_DETERMINISTIC_RULES } from './types';
 import {
   hasReceivedFromDomain,
   hasReceivedFromAddress,
@@ -405,6 +406,101 @@ export async function checkDomainRegistrationDate(domain: string, months: number
 }
 
 /**
+ * Perform TXT lookup for a domain
+ * Returns array of TXT records or null if lookup fails
+ */
+async function lookupTXT(domain: string): Promise<string[] | null> {
+  try {
+    const txtRecords = await dns.resolveTxt(domain);
+    // TXT records come as arrays of strings (chunked), join them
+    return txtRecords.map(record => record.join(''));
+  } catch (error: any) {
+    // DNS lookup failed - domain might not have TXT records or doesn't exist
+    return null;
+  }
+}
+
+/**
+ * Check domain TXT records for security-related records
+ * Returns { hasTXT: boolean, hasSPF: boolean, hasDMARC: boolean, hasDKIM: boolean }
+ */
+async function checkDomainTXTRecords(domain: string): Promise<{
+  hasTXT: boolean;
+  hasSPF: boolean;
+  hasDMARC: boolean;
+  hasDKIM: boolean;
+  txtRecords: string[] | null;
+}> {
+  try {
+    const baseDomain = getBaseDomain(domain);
+    
+    // Get TXT records for the base domain
+    const txtRecords = await lookupTXT(baseDomain);
+    
+    if (!txtRecords || txtRecords.length === 0) {
+      return {
+        hasTXT: false,
+        hasSPF: false,
+        hasDMARC: false,
+        hasDKIM: false,
+        txtRecords: null,
+      };
+    }
+
+    // Check for SPF record (starts with "v=spf1")
+    const hasSPF = txtRecords.some(record => 
+      record.toLowerCase().startsWith('v=spf1')
+    );
+
+    // Check for DMARC record (need to query _dmarc subdomain)
+    let hasDMARC = false;
+    try {
+      const dmarcRecords = await lookupTXT(`_dmarc.${baseDomain}`);
+      hasDMARC = dmarcRecords !== null && dmarcRecords.some(record =>
+        record.toLowerCase().startsWith('v=dmarc1')
+      );
+    } catch (e) {
+      // DMARC lookup failed, that's okay
+      hasDMARC = false;
+    }
+
+    // Check for DKIM - this is tricky as DKIM selectors vary
+    // We'll check for common selectors
+    let hasDKIM = false;
+    const commonDkimSelectors = ['default', 'google', 'selector1', 'selector2', 'k1', 'dkim'];
+    for (const selector of commonDkimSelectors) {
+      try {
+        const dkimRecords = await lookupTXT(`${selector}._domainkey.${baseDomain}`);
+        if (dkimRecords !== null && dkimRecords.some(record =>
+          record.toLowerCase().includes('v=dkim1') || record.toLowerCase().includes('k=rsa')
+        )) {
+          hasDKIM = true;
+          break;
+        }
+      } catch (e) {
+        // DKIM lookup failed for this selector, try next
+      }
+    }
+
+    return {
+      hasTXT: true,
+      hasSPF,
+      hasDMARC,
+      hasDKIM,
+      txtRecords,
+    };
+  } catch (error: any) {
+    return {
+      hasTXT: false,
+      hasSPF: false,
+      hasDMARC: false,
+      hasDKIM: false,
+      txtRecords: null,
+    };
+  }
+}
+
+/**
  * Check if domain resolves and has gmail/etc as mail provider
  * Returns { resolves: boolean, hasKnownMailProvider: boolean, provider: string | null }
  */
@@ -453,90 +549,123 @@ async function checkDomainResolvesWithMailProvider(domain: string): Promise<{
 }
 
 /**
+ * Helper to check if a rule is enabled
+ */
+function isRuleEnabled(
+  ruleName: DeterministicRuleName,
+  enabledRules?: Record<DeterministicRuleName, boolean>
+): boolean {
+  if (enabledRules && ruleName in enabledRules) {
+    return enabledRules[ruleName];
+  }
+  return DEFAULT_DETERMINISTIC_RULES[ruleName] ?? true;
+}
+
+/**
+ * Helper to add a rule result and optionally the label
+ * Only adds the label if the rule is enabled
+ */
+function addRuleResult(
+  ruleName: DeterministicRuleName,
+  matched: boolean,
+  reason: string,
+  labels: string[],
+  results: RuleResult[],
+  enabledRules?: Record<DeterministicRuleName, boolean>
+): void {
+  const enabled = isRuleEnabled(ruleName, enabledRules);
+  
+  if (matched && enabled) {
+    labels.push(ruleName);
+  }
+  
+  results.push({
+    ruleName,
+    matched: matched && enabled, // Only report as matched if enabled
+    reason: enabled ? reason : `[DISABLED] ${reason}`,
+  });
+}
+
+/**
  * Apply deterministic labels using Gmail search (no history needed)
  * Returns both matched labels and all rule results
+ * 
+ * @param email - The email to process
+ * @param enabledRules - Optional configuration for which rules are enabled.
+ *                       If not provided, uses DEFAULT_DETERMINISTIC_RULES.
+ * @param options - Optional. skipHistoryRules: when true, skips rules that require Gmail history
+ *                  (first-domain, first-address, no-email-domain, no-email-address). Use for demo mode.
  */
 export async function applyDeterministicLabels(
-  email: Email
+  email: Email,
+  enabledRules?: Record<DeterministicRuleName, boolean>,
+  options?: { skipHistoryRules?: boolean }
 ): Promise<{ labels: string[]; results: RuleResult[] }> {
   const labels: string[] = [];
   const results: RuleResult[] = [];
+  const skipHistory = options?.skipHistoryRules === true;
 
-  // Check if this is the first email from this domain
-  const hasSeenDomain = await hasReceivedFromDomain(email.fromDomain, email.id);
-  if (!hasSeenDomain) {
-    labels.push('first-domain');
-    results.push({
-      ruleName: 'first-domain',
-      matched: true,
-      reason: `First email from domain ${email.fromDomain}`,
-    });
-  } else {
-    results.push({
-      ruleName: 'first-domain',
-      matched: false,
-      reason: `Previously received emails from domain ${email.fromDomain}`,
-    });
-  }
-
-  // Check if this is the first email from this address
-  const hasSeenAddress = await hasReceivedFromAddress(email.fromAddress, email.id);
-  if (!hasSeenAddress) {
-    labels.push('first-address');
-    results.push({
-      ruleName: 'first-address',
-      matched: true,
-      reason: `First email from address ${email.fromAddress}`,
-    });
-  } else {
-    results.push({
-      ruleName: 'first-address',
-      matched: false,
-      reason: `Previously received emails from address ${email.fromAddress}`,
-    });
-  }
-
-  // Check if we've never sent to any of these domains
-  if (email.toDomains.length > 0) {
-    const hasEmailedDomain = await Promise.all(
-      email.toDomains.map(domain => hasSentToDomain(domain))
+  if (!skipHistory) {
+    // Check if this is the first email from this domain
+    const hasSeenDomain = await hasReceivedFromDomain(email.fromDomain, email.id);
+    addRuleResult(
+      'first-domain',
+      !hasSeenDomain,
+      hasSeenDomain
+        ? `Previously received emails from domain ${email.fromDomain}`
+        : `First email from domain ${email.fromDomain}`,
+      labels,
+      results,
+      enabledRules
     );
-    const neverEmailedDomain = !hasEmailedDomain.some(Boolean);
-    if (neverEmailedDomain) {
-      labels.push('no-email-domain');
-      results.push({
-        ruleName: 'no-email-domain',
-        matched: true,
-        reason: `Never sent emails to domain(s): ${email.toDomains.join(', ')}`,
-      });
-    } else {
-      results.push({
-        ruleName: 'no-email-domain',
-        matched: false,
-        reason: `Previously sent emails to domain(s): ${email.toDomains.join(', ')}`,
-      });
+
+    // Check if this is the first email from this address
+    const hasSeenAddress = await hasReceivedFromAddress(email.fromAddress, email.id);
+    addRuleResult(
+      'first-address',
+      !hasSeenAddress,
+      hasSeenAddress
+        ? `Previously received emails from address ${email.fromAddress}`
+        : `First email from address ${email.fromAddress}`,
+      labels,
+      results,
+      enabledRules
+    );
+
+    // Check if we've never sent to any of these domains
+    if (email.toDomains.length > 0) {
+      const hasEmailedDomain = await Promise.all(
+        email.toDomains.map(domain => hasSentToDomain(domain))
+      );
+      const neverEmailedDomain = !hasEmailedDomain.some(Boolean);
+      addRuleResult(
+        'no-email-domain',
+        neverEmailedDomain,
+        neverEmailedDomain
+          ? `Never sent emails to domain(s): ${email.toDomains.join(', ')}`
+          : `Previously sent emails to domain(s): ${email.toDomains.join(', ')}`,
+        labels,
+        results,
+        enabledRules
+      );
     }
-  }
 
-  // Check if we've never sent to any of these addresses
-  if (email.toAddresses.length > 0) {
-    const hasEmailedAddress = await Promise.all(
-      email.toAddresses.map(address => hasSentToAddress(address))
-    );
-    const neverEmailedAddress = !hasEmailedAddress.some(Boolean);
-    if (neverEmailedAddress) {
-      labels.push('no-email-address');
-      results.push({
-        ruleName: 'no-email-address',
-        matched: true,
-        reason: `Never sent emails to address(es): ${email.toAddresses.join(', ')}`,
-      });
-    } else {
-      results.push({
-        ruleName: 'no-email-address',
-        matched: false,
-        reason: `Previously sent emails to address(es): ${email.toAddresses.join(', ')}`,
-      });
+    // Check if we've never sent to any of these addresses
+    if (email.toAddresses.length > 0) {
+      const hasEmailedAddress = await Promise.all(
+        email.toAddresses.map(address => hasSentToAddress(address))
+      );
+      const neverEmailedAddress = !hasEmailedAddress.some(Boolean);
+      addRuleResult(
+        'no-email-address',
+        neverEmailedAddress,
+        neverEmailedAddress
+          ? `Never sent emails to address(es): ${email.toAddresses.join(', ')}`
+          : `Previously sent emails to address(es): ${email.toAddresses.join(', ')}`,
+        labels,
+        results,
+        enabledRules
+      );
     }
   }
 
@@ -546,20 +675,16 @@ export async function applyDeterministicLabels(
       const domainStatus = await checkDomainStatus(email.fromDomain);
       
       // Check if domain is down
-      if (domainStatus.isDown) {
-        labels.push('domain-down');
-        results.push({
-          ruleName: 'domain-down',
-          matched: true,
-          reason: `Domain ${email.fromDomain} is not accessible (HTTP/HTTPS request failed)`,
-        });
-      } else {
-        results.push({
-          ruleName: 'domain-down',
-          matched: false,
-          reason: `Domain ${email.fromDomain} is accessible`,
-        });
-      }
+      addRuleResult(
+        'domain-down',
+        domainStatus.isDown,
+        domainStatus.isDown
+          ? `Domain ${email.fromDomain} is not accessible (HTTP/HTTPS request failed)`
+          : `Domain ${email.fromDomain} is accessible`,
+        labels,
+        results,
+        enabledRules
+      );
 
       // Check if domain redirects to a different domain (excluding gmail.com domain)
       if (domainStatus.redirectsToDifferentDomain === true) {
@@ -567,47 +692,54 @@ export async function applyDeterministicLabels(
         const fromDomainLower = email.fromDomain.toLowerCase();
         const isGmailDomain = fromDomainLower === 'gmail.com';
         
-        if (!isGmailDomain) {
-          labels.push('domain-redirects');
-          results.push({
-            ruleName: 'domain-redirects',
-            matched: true,
-            reason: `Domain ${email.fromDomain} redirects to a different domain and is not gmail.com`,
-          });
-        } else {
-          results.push({
-            ruleName: 'domain-redirects',
-            matched: false,
-            reason: `Domain ${email.fromDomain} is gmail.com (exception: Gmail domain redirects are not flagged)`,
-          });
-        }
+        addRuleResult(
+          'domain-redirects',
+          !isGmailDomain,
+          isGmailDomain
+            ? `Domain ${email.fromDomain} is gmail.com (exception: Gmail domain redirects are not flagged)`
+            : `Domain ${email.fromDomain} redirects to a different domain and is not gmail.com`,
+          labels,
+          results,
+          enabledRules
+        );
       } else if (domainStatus.redirectsToDifferentDomain === false) {
-        results.push({
-          ruleName: 'domain-redirects',
-          matched: false,
-          reason: `Domain ${email.fromDomain} does not redirect to a different domain`,
-        });
+        addRuleResult(
+          'domain-redirects',
+          false,
+          `Domain ${email.fromDomain} does not redirect to a different domain`,
+          labels,
+          results,
+          enabledRules
+        );
       } else {
         // Domain is down, so we can't check redirects
-        results.push({
-          ruleName: 'domain-redirects',
-          matched: false,
-          reason: `Domain ${email.fromDomain} is down, cannot check redirects`,
-        });
+        addRuleResult(
+          'domain-redirects',
+          false,
+          `Domain ${email.fromDomain} is down, cannot check redirects`,
+          labels,
+          results,
+          enabledRules
+        );
       }
     } catch (error: any) {
       // If check fails for any reason, consider it as domain down
-      labels.push('domain-down');
-      results.push({
-        ruleName: 'domain-down',
-        matched: true,
-        reason: `Domain ${email.fromDomain} check failed: ${error.message || 'Unknown error'}`,
-      });
-      results.push({
-        ruleName: 'domain-redirects',
-        matched: false,
-        reason: `Could not check redirect status for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
-      });
+      addRuleResult(
+        'domain-down',
+        true,
+        `Domain ${email.fromDomain} check failed: ${error.message || 'Unknown error'}`,
+        labels,
+        results,
+        enabledRules
+      );
+      addRuleResult(
+        'domain-redirects',
+        false,
+        `Could not check redirect status for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
+        labels,
+        results,
+        enabledRules
+      );
     }
   }
 
@@ -615,28 +747,23 @@ export async function applyDeterministicLabels(
   if (email.fromDomain) {
     try {
       const domainRegCheck = await checkDomainRegistrationDate(email.fromDomain, 3);
-      if (domainRegCheck.isNewDomain && domainRegCheck.registrationDate) {
-        labels.push('new-domain');
-        results.push({
-          ruleName: 'new-domain',
-          matched: true,
-          reason: `Domain ${email.fromDomain} was registered on ${domainRegCheck.registrationDate.toISOString().split('T')[0]} (within last 3 months)`,
-        });
-      } else {
-        results.push({
-          ruleName: 'new-domain',
-          matched: false,
-          reason: domainRegCheck.registrationDate
-            ? `Domain ${email.fromDomain} was registered on ${domainRegCheck.registrationDate.toISOString().split('T')[0]} (more than 3 months ago)`
-            : `Could not determine registration date for domain ${email.fromDomain}`,
-        });
-      }
+      const isNew = domainRegCheck.isNewDomain && domainRegCheck.registrationDate !== null;
+      const reason = isNew
+        ? `Domain ${email.fromDomain} was registered on ${domainRegCheck.registrationDate!.toISOString().split('T')[0]} (within last 3 months)`
+        : domainRegCheck.registrationDate
+          ? `Domain ${email.fromDomain} was registered on ${domainRegCheck.registrationDate.toISOString().split('T')[0]} (more than 3 months ago)`
+          : `Could not determine registration date for domain ${email.fromDomain}`;
+      
+      addRuleResult('new-domain', isNew, reason, labels, results, enabledRules);
     } catch (error: any) {
-      results.push({
-        ruleName: 'new-domain',
-        matched: false,
-        reason: `Failed to check registration date for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
-      });
+      addRuleResult(
+        'new-domain',
+        false,
+        `Failed to check registration date for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
+        labels,
+        results,
+        enabledRules
+      );
     }
   }
 
@@ -644,30 +771,23 @@ export async function applyDeterministicLabels(
   if (email.fromDomain) {
     try {
       const domainResolveCheck = await checkDomainResolvesWithMailProvider(email.fromDomain);
-      if (domainResolveCheck.resolves && domainResolveCheck.hasKnownMailProvider) {
-        labels.push('domain-resolves-known-provider');
-        results.push({
-          ruleName: 'domain-resolves-known-provider',
-          matched: true,
-          reason: `Domain ${email.fromDomain} resolves and uses known mail provider: ${domainResolveCheck.provider || 'unknown'}`,
-        });
-      } else {
-        results.push({
-          ruleName: 'domain-resolves-known-provider',
-          matched: false,
-          reason: !domainResolveCheck.resolves
-            ? `Domain ${email.fromDomain} does not resolve (DNS lookup failed)`
-            : !domainResolveCheck.hasKnownMailProvider
-            ? `Domain ${email.fromDomain} resolves but does not use a known mail provider (gmail/msft/automation/work-email)`
-            : `Domain ${email.fromDomain} check failed`,
-        });
-      }
+      const matched = domainResolveCheck.resolves && domainResolveCheck.hasKnownMailProvider;
+      const reason = matched
+        ? `Domain ${email.fromDomain} resolves and uses known mail provider: ${domainResolveCheck.provider || 'unknown'}`
+        : !domainResolveCheck.resolves
+          ? `Domain ${email.fromDomain} does not resolve (DNS lookup failed)`
+          : `Domain ${email.fromDomain} resolves but does not use a known mail provider (gmail/msft/automation/work-email)`;
+      
+      addRuleResult('domain-resolves-known-provider', matched, reason, labels, results, enabledRules);
     } catch (error: any) {
-      results.push({
-        ruleName: 'domain-resolves-known-provider',
-        matched: false,
-        reason: `Failed to check domain resolution and mail provider for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
-      });
+      addRuleResult(
+        'domain-resolves-known-provider',
+        false,
+        `Failed to check domain resolution and mail provider for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
+        labels,
+        results,
+        enabledRules
+      );
     }
   }
 
@@ -676,115 +796,139 @@ export async function applyDeterministicLabels(
     try {
       const mxRecords = await lookupMX(email.fromDomain);
       const provider = categorizeSMTPProvider(mxRecords);
+      const mxStr = mxRecords?.join(', ') || 'unknown';
 
       // Rule 1: Gmail
-      if (provider === 'gmail') {
-        labels.push('smtp-gmail');
-        results.push({
-          ruleName: 'smtp-gmail',
-          matched: true,
-          reason: `Domain ${email.fromDomain} uses Gmail SMTP (MX: ${mxRecords?.join(', ') || 'unknown'})`,
-        });
-      } else {
-        results.push({
-          ruleName: 'smtp-gmail',
-          matched: false,
-          reason: `Domain ${email.fromDomain} does not use Gmail SMTP`,
-        });
-      }
+      addRuleResult(
+        'smtp-gmail',
+        provider === 'gmail',
+        provider === 'gmail'
+          ? `Domain ${email.fromDomain} uses Gmail SMTP (MX: ${mxStr})`
+          : `Domain ${email.fromDomain} does not use Gmail SMTP`,
+        labels,
+        results,
+        enabledRules
+      );
 
       // Rule 2: Microsoft
-      if (provider === 'msft') {
-        labels.push('smtp-msft');
-        results.push({
-          ruleName: 'smtp-msft',
-          matched: true,
-          reason: `Domain ${email.fromDomain} uses Microsoft SMTP (MX: ${mxRecords?.join(', ') || 'unknown'})`,
-        });
-      } else {
-        results.push({
-          ruleName: 'smtp-msft',
-          matched: false,
-          reason: `Domain ${email.fromDomain} does not use Microsoft SMTP`,
-        });
-      }
+      addRuleResult(
+        'smtp-msft',
+        provider === 'msft',
+        provider === 'msft'
+          ? `Domain ${email.fromDomain} uses Microsoft SMTP (MX: ${mxStr})`
+          : `Domain ${email.fromDomain} does not use Microsoft SMTP`,
+        labels,
+        results,
+        enabledRules
+      );
 
       // Rule 3: Automation platform
-      if (provider === 'automation') {
-        labels.push('smtp-automation');
-        results.push({
-          ruleName: 'smtp-automation',
-          matched: true,
-          reason: `Domain ${email.fromDomain} uses automation platform SMTP (MX: ${mxRecords?.join(', ') || 'unknown'})`,
-        });
-      } else {
-        results.push({
-          ruleName: 'smtp-automation',
-          matched: false,
-          reason: `Domain ${email.fromDomain} does not use automation platform SMTP`,
-        });
-      }
+      addRuleResult(
+        'smtp-automation',
+        provider === 'automation',
+        provider === 'automation'
+          ? `Domain ${email.fromDomain} uses automation platform SMTP (MX: ${mxStr})`
+          : `Domain ${email.fromDomain} does not use automation platform SMTP`,
+        labels,
+        results,
+        enabledRules
+      );
 
       // Rule 4: Other work email
-      if (provider === 'work-email') {
-        labels.push('smtp-work-email');
-        results.push({
-          ruleName: 'smtp-work-email',
-          matched: true,
-          reason: `Domain ${email.fromDomain} uses work email provider SMTP (MX: ${mxRecords?.join(', ') || 'unknown'})`,
-        });
-      } else {
-        results.push({
-          ruleName: 'smtp-work-email',
-          matched: false,
-          reason: `Domain ${email.fromDomain} does not use work email provider SMTP`,
-        });
-      }
+      addRuleResult(
+        'smtp-work-email',
+        provider === 'work-email',
+        provider === 'work-email'
+          ? `Domain ${email.fromDomain} uses work email provider SMTP (MX: ${mxStr})`
+          : `Domain ${email.fromDomain} does not use work email provider SMTP`,
+        labels,
+        results,
+        enabledRules
+      );
 
       // Rule 5: Other (uncategorized SMTP provider)
-      if (provider === 'other') {
-        labels.push('smtp-other');
-        results.push({
-          ruleName: 'smtp-other',
-          matched: true,
-          reason: `Domain ${email.fromDomain} uses uncategorized SMTP provider (MX: ${mxRecords?.join(', ') || 'unknown'})`,
-        });
-      } else {
-        results.push({
-          ruleName: 'smtp-other',
-          matched: false,
-          reason: provider === null 
+      addRuleResult(
+        'smtp-other',
+        provider === 'other',
+        provider === 'other'
+          ? `Domain ${email.fromDomain} uses uncategorized SMTP provider (MX: ${mxStr})`
+          : provider === null
             ? `MX lookup failed for ${email.fromDomain}, cannot determine SMTP provider`
             : `Domain ${email.fromDomain} matches a known SMTP provider category`,
-        });
-      }
+        labels,
+        results,
+        enabledRules
+      );
     } catch (error: any) {
       // If MX lookup fails, mark all rules as not matched
-      results.push({
-        ruleName: 'smtp-gmail',
-        matched: false,
-        reason: `MX lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
-      });
-      results.push({
-        ruleName: 'smtp-msft',
-        matched: false,
-        reason: `MX lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
-      });
-      results.push({
-        ruleName: 'smtp-automation',
-        matched: false,
-        reason: `MX lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
-      });
-      results.push({
-        ruleName: 'smtp-work-email',
-        matched: false,
-        reason: `MX lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
-      });
-      results.push({
-        ruleName: 'smtp-other',
-        matched: false,
-        reason: `MX lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`,
-      });
+      const errorReason = `MX lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`;
+      addRuleResult('smtp-gmail', false, errorReason, labels, results, enabledRules);
+      addRuleResult('smtp-msft', false, errorReason, labels, results, enabledRules);
+      addRuleResult('smtp-automation', false, errorReason, labels, results, enabledRules);
+      addRuleResult('smtp-work-email', false, errorReason, labels, results, enabledRules);
+      addRuleResult('smtp-other', false, errorReason, labels, results, enabledRules);
+    }
+  }
+
+  // Check TXT DNS records (SPF, DMARC, DKIM)
+  if (email.fromDomain) {
+    try {
+      const txtCheck = await checkDomainTXTRecords(email.fromDomain);
+
+      // Rule: no-spf - Domain lacks SPF record (potential spam/phishing indicator)
+      addRuleResult(
+        'no-spf',
+        !txtCheck.hasSPF,
+        txtCheck.hasSPF
+          ? `Domain ${email.fromDomain} has SPF record configured`
+          : `Domain ${email.fromDomain} does not have an SPF record configured`,
+        labels,
+        results,
+        enabledRules
+      );
+
+      // Rule: no-dmarc - Domain lacks DMARC record (potential spam/phishing indicator)
+      addRuleResult(
+        'no-dmarc',
+        !txtCheck.hasDMARC,
+        txtCheck.hasDMARC
+          ? `Domain ${email.fromDomain} has DMARC record configured`
+          : `Domain ${email.fromDomain} does not have a DMARC record configured`,
+        labels,
+        results,
+        enabledRules
+      );
+
+      // Rule: has-dkim - Domain has DKIM configured (good security practice)
+      addRuleResult(
+        'has-dkim',
+        txtCheck.hasDKIM,
+        txtCheck.hasDKIM
+          ? `Domain ${email.fromDomain} has DKIM record configured`
+          : `Domain ${email.fromDomain} does not have a detectable DKIM record (checked common selectors)`,
+        labels,
+        results,
+        enabledRules
+      );
+
+      // Rule: no-txt - Domain has no TXT records at all (unusual for legitimate domains)
+      addRuleResult(
+        'no-txt',
+        !txtCheck.hasTXT,
+        txtCheck.hasTXT
+          ? `Domain ${email.fromDomain} has TXT DNS records`
+          : `Domain ${email.fromDomain} has no TXT DNS records`,
+        labels,
+        results,
+        enabledRules
+      );
+    } catch (error: any) {
+      // If TXT lookup fails, mark all rules as not matched
+      const errorReason = `TXT lookup failed for ${email.fromDomain}: ${error.message || 'Unknown error'}`;
+      addRuleResult('no-spf', false, errorReason, labels, results, enabledRules);
+      addRuleResult('no-dmarc', false, errorReason, labels, results, enabledRules);
+      addRuleResult('has-dkim', false, errorReason, labels, results, enabledRules);
+      addRuleResult('no-txt', false, errorReason, labels, results, enabledRules);
     }
   }
 

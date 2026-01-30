@@ -123,3 +123,31 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Very thin scrollbar for rules list and similar */
+.rules-list-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.45 0 0 / 0.4) transparent;
+}
+.rules-list-thin-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.rules-list-thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.rules-list-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.45 0 0 / 0.4);
+  border-radius: 4px;
+}
+.rules-list-thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.45 0 0 / 0.6);
+}
+.dark .rules-list-thin-scrollbar {
+  scrollbar-color: oklch(0.708 0 0 / 0.4) transparent;
+}
+.dark .rules-list-thin-scrollbar::-webkit-scrollbar-thumb {
+  background: oklch(0.708 0 0 / 0.4);
+}
+.dark .rules-list-thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.708 0 0 / 0.6);
+}

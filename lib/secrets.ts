@@ -40,7 +40,23 @@ export async function getGeminiApiKey(): Promise<string> {
   // If not in environment, fetch from AWS Secrets Manager
   console.log('🔐 GEMINI_API_KEY not found in environment, fetching from AWS Secrets Manager...');
   try {
-    const secret = await getSecretFromAWS(GEMINI_API_KEY_SECRET_ARN);
+    const raw = await getSecretFromAWS(GEMINI_API_KEY_SECRET_ARN);
+    if (!raw) {
+      throw new Error('GEMINI_API_KEY secret is empty in AWS Secrets Manager');
+    }
+    // Secret may be stored as plain key or as JSON e.g. {"GEMINI_API_KEY":"..."}
+    let secret = raw;
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed) as { GEMINI_API_KEY?: string };
+        if (parsed.GEMINI_API_KEY) {
+          secret = parsed.GEMINI_API_KEY.trim();
+        }
+      } catch {
+        // Not valid JSON, use raw
+      }
+    }
     if (!secret) {
       throw new Error('GEMINI_API_KEY secret is empty in AWS Secrets Manager');
     }

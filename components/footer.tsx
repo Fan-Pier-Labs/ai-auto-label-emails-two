@@ -34,6 +34,20 @@ export function Footer() {
 
           <div className="flex items-center gap-4">
             <Link 
+              href="https://fanpierlabs.com/privacy_policy.html" 
+              target="_blank"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Privacy
+            </Link>
+            <Link 
+              href="https://fanpierlabs.com/terms.pdf" 
+              target="_blank"
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Terms of Service
+            </Link>
+            <Link 
               href="https://github.com/Fan-Pier-Labs/ai-auto-label-emails-two" 
               target="_blank"
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
