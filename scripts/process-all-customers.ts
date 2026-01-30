@@ -1,12 +1,25 @@
 #!/usr/bin/env node
 import Stripe from 'stripe';
 import { config } from 'dotenv';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { decryptFromStripe, isEncrypted } from '../lib/encryption';
 import { getGeminiApiKey } from '../lib/secrets';
-import { main } from './run-processor';
+import { ProcessingSession } from '../lib/processor-utils';
 
 // Load .env file if it exists
 config();
+
+interface GoogleCreds {
+  web?: {
+    client_id: string;
+    client_secret: string;
+  };
+  installed?: {
+    client_id: string;
+    client_secret: string;
+  };
+}
 
 interface CustomerResult {
   customerId: string;
@@ -22,6 +35,7 @@ interface ProcessingOptions {
   lookbackHours?: number;
   filterEmail?: string;
   limit?: number;
+  concurrency?: number;
 }
 
 /**
@@ -35,6 +49,45 @@ function getStripe(): Stripe {
   return new Stripe(secretKey, {
     apiVersion: '2025-12-15.clover',
   });
+}
+
+/**
+ * Gets Gmail OAuth credentials from environment or google_creds.json
+ */
+function getOAuthCredentials(): { clientId: string; clientSecret: string } {
+  // First try environment variables
+  const envClientId = process.env.GMAIL_CLIENT_ID;
+  const envClientSecret = process.env.GMAIL_CLIENT_SECRET;
+
+  if (envClientId && envClientSecret) {
+    return { clientId: envClientId, clientSecret: envClientSecret };
+  }
+
+  // Fallback to google_creds.json
+  try {
+    const credsPath = join(process.cwd(), 'google_creds.json');
+    const credsContent = readFileSync(credsPath, 'utf-8');
+    const creds: GoogleCreds = JSON.parse(credsContent);
+
+    const webCreds = creds.web || creds.installed;
+    if (webCreds?.client_id && webCreds?.client_secret) {
+      return {
+        clientId: webCreds.client_id,
+        clientSecret: webCreds.client_secret,
+      };
+    }
+  } catch (error: any) {
+    if (error.code !== 'ENOENT') {
+      console.error('Error reading google_creds.json:', error);
+    }
+  }
+
+  throw new Error(
+    '❌ Missing Google OAuth credentials!\n\n' +
+    'Either:\n' +
+    '1. Create google_creds.json in the project root (download from https://console.cloud.google.com/apis/credentials), or\n' +
+    '2. Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET environment variables'
+  );
 }
 
 /**
@@ -68,6 +121,7 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
     lookbackHours = parseInt(process.env.LOOKBACK_HOURS || '24', 10),
     filterEmail = process.env.FILTER_EMAIL,
     limit = parseInt(process.env.CUSTOMER_LIMIT || '100', 10),
+    concurrency = parseInt(process.env.EMAIL_CONCURRENCY || '3', 10),
   } = options;
 
   console.log('📧 Auto Label Email - Process All Customers\n');
@@ -79,11 +133,14 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
 
   const stripe = getStripe();
   const geminiApiKey = await getGeminiApiKey();
+  const { clientId, clientSecret } = getOAuthCredentials();
 
   console.log('📋 Configuration:');
   console.log(`   Max emails per customer: ${maxEmails}`);
   console.log(`   Lookback hours: ${lookbackHours}`);
   console.log(`   Customer limit: ${limit}`);
+  console.log(`   Email concurrency: ${concurrency} (parallel)`);
+  console.log(`   Using optimized ProcessingSession with caching`);
   if (filterEmail) {
     console.log(`   Filter email: ${filterEmail}`);
   }
@@ -166,21 +223,55 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
           ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit`
           : undefined;
 
-        await main({
-          emailAddress: customerEmail,
-          gmailRefreshToken: refreshToken,
+        // Create optimized processing session for this customer
+        // Session initializes Gmail/Gemini once and caches rules + domain lookups
+        const session = new ProcessingSession({
+          gmail: {
+            clientId,
+            clientSecret,
+            refreshToken,
+          },
           geminiApiKey,
           googleSheetsUrl,
           dryRun,
-          maxEmails,
-          lookbackHours,
-          useInMemoryTracking: true, // Use in-memory tracking for batch processing
         });
+
+        // Initialize session (loads rules once, validates OAuth)
+        await session.initialize();
+
+        // Build search query
+        const query = `in:inbox newer_than:${lookbackHours}h`;
+        console.log(`   🔍 Search: ${query}`);
+
+        // Search for emails
+        const emailIds = await session.searchEmails(query, maxEmails);
+
+        if (emailIds.length === 0) {
+          console.log(`   📭 No emails found`);
+          results.push({
+            customerId,
+            email: customerEmail,
+            success: true,
+            emailsProcessed: 0,
+          });
+          continue;
+        }
+
+        console.log(`   📬 Found ${emailIds.length} email(s)`);
+
+        // Process all emails using the cached session (with parallel processing)
+        const { processed, errors } = await session.processEmails(emailIds, concurrency);
+
+        // Log cache stats for debugging
+        const cacheStats = session.getCacheStats();
+        console.log(`   📊 Cache hits: MX=${cacheStats.mxCache}, TXT=${cacheStats.txtCache}, Status=${cacheStats.domainStatusCache}`);
 
         results.push({
           customerId,
           email: customerEmail,
-          success: true,
+          success: errors === 0,
+          emailsProcessed: processed,
+          error: errors > 0 ? `${errors} email(s) failed` : undefined,
         });
       } catch (error: any) {
         console.error(`   ❌ Error: ${error.message}`);
@@ -205,10 +296,12 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
 
   const successful = results.filter(r => r.success);
   const failed = results.filter(r => !r.success);
+  const totalEmails = results.reduce((sum, r) => sum + (r.emailsProcessed || 0), 0);
 
-  console.log(`✅ Successful: ${successful.length}`);
-  console.log(`❌ Failed: ${failed.length}`);
-  console.log(`📧 Total processed: ${results.length}`);
+  console.log(`✅ Successful customers: ${successful.length}`);
+  console.log(`❌ Failed customers: ${failed.length}`);
+  console.log(`👥 Total customers: ${results.length}`);
+  console.log(`📧 Total emails processed: ${totalEmails}`);
 
   if (failed.length > 0) {
     console.log('\n❌ Failed customers:');
@@ -234,6 +327,8 @@ function parseArgs(): ProcessingOptions {
       options.lookbackHours = parseInt(arg.slice('--lookback='.length), 10);
     } else if (arg.startsWith('--limit=')) {
       options.limit = parseInt(arg.slice('--limit='.length), 10);
+    } else if (arg.startsWith('--concurrency=')) {
+      options.concurrency = parseInt(arg.slice('--concurrency='.length), 10);
     } else if (arg === '--dry-run') {
       options.dryRun = true;
     } else if (arg === '--help' || arg === '-h') {
@@ -245,6 +340,7 @@ Options:
   --max-emails=<n>      Max emails to process per customer (default: 20)
   --lookback=<hours>    Hours to look back for emails (default: 24)
   --limit=<n>           Max number of customers to process (default: 100)
+  --concurrency=<n>     Number of emails to process in parallel (default: 3)
   --dry-run             Don't apply labels, just simulate
   --help, -h            Show this help message
 
@@ -254,6 +350,7 @@ Environment variables:
   LOOKBACK_HOURS        Hours to look back
   FILTER_EMAIL          Process only this customer email
   CUSTOMER_LIMIT        Max customers to process
+  EMAIL_CONCURRENCY     Number of emails to process in parallel
 `);
       process.exit(0);
     }
