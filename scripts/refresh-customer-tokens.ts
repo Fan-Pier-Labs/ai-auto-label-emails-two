@@ -159,10 +159,14 @@ async function refreshCustomerTokens(options: RefreshOptions = {}): Promise<void
       if (subscriptionCount >= limit) break;
       subscriptionCount++;
 
-      // Get customer from expanded data
-      const customer = subscription.customer as Stripe.Customer;
-
-      if (!customer || customer.deleted) {
+      // Get customer from expanded data (avoid testing expandable field for truthiness)
+      const rawCustomer = subscription.customer;
+      if (typeof rawCustomer !== 'object' || rawCustomer === null) {
+        console.log(`\n[${subscriptionCount}] ⏭️  Skipping - customer not expanded`);
+        continue;
+      }
+      const customer = rawCustomer as Stripe.Customer | Stripe.DeletedCustomer;
+      if (customer.deleted) {
         console.log(`\n[${subscriptionCount}] ⏭️  Skipping deleted customer`);
         continue;
       }
