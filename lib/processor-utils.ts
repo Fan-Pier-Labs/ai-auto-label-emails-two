@@ -19,6 +19,7 @@ import { initializeGmail } from './gmail';
 import { initializeGemini } from './gemini';
 import { fetchRulesFromSheet, fetchDeterministicRulesConfig, extractSpreadsheetId } from './sheets';
 import { applyDeterministicLabels as applyDeterministicLabelsLib } from './deterministic';
+import { analytics } from './analytics';
 import type { Email, LabelRule, RuleResult, DeterministicRuleConfig } from './types';
 
 // ============================================================================
@@ -662,21 +663,40 @@ Does this email CLEARLY match the rule? Respond with JSON only:
   async processEmails(emailIds: string[], concurrency: number = 3): Promise<{ processed: number; errors: number }> {
     let processed = 0;
     let errors = 0;
-    let completed = 0;
+    const total = emailIds.length;
 
     // Process emails in parallel batches
     for (let i = 0; i < emailIds.length; i += concurrency) {
       const batch = emailIds.slice(i, i + concurrency);
-      
+
       const batchPromises = batch.map(async (emailId, batchIndex) => {
         const globalIndex = i + batchIndex + 1;
-        console.log(`\n[${globalIndex}/${emailIds.length}] Starting...`);
+        const start = Date.now();
 
         try {
-          await this.processEmail(emailId);
+          const labels = await this.processEmail(emailId);
+          const durationMs = Date.now() - start;
+          const durationSec = (durationMs / 1000).toFixed(1);
+          console.log(`\n[${globalIndex}/${total}] Completed in ${durationSec}s (${labels.length} labels)`);
+          analytics.track('email_processing_complete', {
+            emailId,
+            index: globalIndex,
+            total,
+            durationMs,
+            labelsCount: labels.length,
+          });
           return { success: true, index: globalIndex };
         } catch (error: any) {
-          console.error(`   ❌ [${globalIndex}] Error: ${error.message}`);
+          const durationMs = Date.now() - start;
+          const durationSec = (durationMs / 1000).toFixed(1);
+          console.error(`   ❌ [${globalIndex}/${total}] Error in ${durationSec}s: ${error.message}`);
+          analytics.track('email_processing_error', {
+            emailId,
+            index: globalIndex,
+            total,
+            durationMs,
+            error: error.message,
+          });
           return { success: false, index: globalIndex, error: error.message };
         }
       });
@@ -685,7 +705,6 @@ Does this email CLEARLY match the rule? Respond with JSON only:
       const results = await Promise.all(batchPromises);
 
       for (const result of results) {
-        completed++;
         if (result.success) {
           processed++;
         } else {

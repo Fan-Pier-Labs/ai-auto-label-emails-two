@@ -6,6 +6,7 @@ import { join } from 'path';
 import { decryptFromStripe, isEncrypted } from '../lib/encryption';
 import { getGeminiApiKey } from '../lib/secrets';
 import { ProcessingSession } from '../lib/processor-utils';
+import { analytics } from '../lib/analytics';
 
 // Load .env file if it exists
 config();
@@ -146,6 +147,14 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
   }
   console.log('');
 
+  analytics.track('batch_config', {
+    maxEmails,
+    lookbackHours,
+    limit,
+    concurrency,
+    dryRun,
+  });
+
   // Fetch all active subscriptions
   console.log('🔍 Fetching active subscriptions from Stripe...');
   
@@ -167,10 +176,16 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
       subscriptionCount++;
 
       // Get customer from expanded data
-      const customer = subscription.customer as Stripe.Customer;
-      
-      if (!customer || customer.deleted) {
+      const customer = subscription.customer as Stripe.Customer | Stripe.DeletedCustomer | null;
+
+      if (!customer) {
         console.log(`\n[${subscriptionCount}] ⏭️  Skipping deleted customer`);
+        analytics.track('customer_skipped', { customerId: 'unknown', reason: 'deleted' });
+        continue;
+      }
+      if ('deleted' in customer && customer.deleted) {
+        console.log(`\n[${subscriptionCount}] ⏭️  Skipping deleted customer`);
+        analytics.track('customer_skipped', { customerId: customer.id, reason: 'deleted' });
         continue;
       }
 
@@ -189,6 +204,7 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
       // Skip if missing required fields
       if (!refreshToken) {
         console.log(`\n[${subscriptionCount}] ⏭️  Skipping ${customerId}: No refresh token`);
+        analytics.track('customer_skipped', { customerId, reason: 'no_refresh_token' });
         results.push({
           customerId,
           email: customerEmail || customer.email || 'unknown',
@@ -200,6 +216,7 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
 
       if (!customerEmail) {
         console.log(`\n[${subscriptionCount}] ⏭️  Skipping ${customerId}: No email`);
+        analytics.track('customer_skipped', { customerId, reason: 'no_email_in_metadata' });
         results.push({
           customerId,
           email: customer.email || 'unknown',
@@ -212,10 +229,14 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
       // Apply email filter if specified
       if (filterEmail && customerEmail.toLowerCase() !== filterEmail.toLowerCase()) {
         console.log(`\n[${subscriptionCount}] ⏭️  Skipping ${customerEmail}: Does not match filter`);
+        analytics.track('customer_skipped', { customerId, reason: 'filter_mismatch' });
         continue;
       }
 
       console.log(`\n[${subscriptionCount}] 📧 Processing ${customerEmail} (${customerId})`);
+      analytics.track('customer_processing_start', { customerId, customerIndex: subscriptionCount });
+
+      const customerStart = Date.now();
 
       try {
         // Build Google Sheets URL from sheet ID if provided
@@ -248,6 +269,14 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
 
         if (emailIds.length === 0) {
           console.log(`   📭 No emails found`);
+          const durationMs = Date.now() - customerStart;
+          analytics.track('customer_processing_complete', {
+            customerId,
+            success: true,
+            emailsProcessed: 0,
+            errors: 0,
+            durationMs,
+          });
           results.push({
             customerId,
             email: customerEmail,
@@ -262,6 +291,15 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
         // Process all emails using the cached session (with parallel processing)
         const { processed, errors } = await session.processEmails(emailIds, concurrency);
 
+        const durationMs = Date.now() - customerStart;
+        analytics.track('customer_processing_complete', {
+          customerId,
+          success: errors === 0,
+          emailsProcessed: processed,
+          errors,
+          durationMs,
+        });
+
         // Log cache stats for debugging
         const cacheStats = session.getCacheStats();
         console.log(`   📊 Cache hits: MX=${cacheStats.mxCache}, TXT=${cacheStats.txtCache}, Status=${cacheStats.domainStatusCache}`);
@@ -274,7 +312,13 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
           error: errors > 0 ? `${errors} email(s) failed` : undefined,
         });
       } catch (error: any) {
+        const durationMs = Date.now() - customerStart;
         console.error(`   ❌ Error: ${error.message}`);
+        analytics.track('customer_processing_error', {
+          customerId,
+          error: error.message,
+          durationMs,
+        });
         results.push({
           customerId,
           email: customerEmail,
@@ -309,6 +353,13 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
       console.log(`   - ${result.email} (${result.customerId}): ${result.error}`);
     }
   }
+
+  analytics.track('batch_summary', {
+    totalCustomers: results.length,
+    successfulCustomers: successful.length,
+    failedCustomers: failed.length,
+    totalEmailsProcessed: totalEmails,
+  });
 
   console.log('\n✅ All customers processed\n');
 }
