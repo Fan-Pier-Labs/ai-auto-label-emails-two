@@ -1,0 +1,278 @@
+#!/usr/bin/env node
+import Stripe from 'stripe';
+import { config } from 'dotenv';
+import { decryptFromStripe, isEncrypted } from '../lib/encryption';
+import { getGeminiApiKey } from '../lib/secrets';
+import { main } from './run-processor';
+
+// Load .env file if it exists
+config();
+
+interface CustomerResult {
+  customerId: string;
+  email: string;
+  success: boolean;
+  error?: string;
+  emailsProcessed?: number;
+}
+
+interface ProcessingOptions {
+  dryRun?: boolean;
+  maxEmails?: number;
+  lookbackHours?: number;
+  filterEmail?: string;
+  limit?: number;
+}
+
+/**
+ * Gets the Stripe client instance
+ */
+function getStripe(): Stripe {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('STRIPE_SECRET_KEY is not set');
+  }
+  return new Stripe(secretKey, {
+    apiVersion: '2025-12-15.clover',
+  });
+}
+
+/**
+ * Safely decrypts a metadata value, returning undefined if empty or invalid
+ */
+function safeDecrypt(value: string | undefined): string | undefined {
+  if (!value || value.trim() === '') {
+    return undefined;
+  }
+  
+  try {
+    // Check if value looks like encrypted data
+    if (!isEncrypted(value)) {
+      // Might be plaintext (legacy), return as-is
+      return value;
+    }
+    return decryptFromStripe(value);
+  } catch (error: any) {
+    console.warn(`  ⚠️  Failed to decrypt value: ${error.message}`);
+    return undefined;
+  }
+}
+
+/**
+ * Process emails for all active Stripe customers
+ */
+async function processAllCustomers(options: ProcessingOptions = {}): Promise<void> {
+  const {
+    dryRun = process.env.DRY_RUN === 'true',
+    maxEmails = parseInt(process.env.MAX_EMAILS || '20', 10),
+    lookbackHours = parseInt(process.env.LOOKBACK_HOURS || '24', 10),
+    filterEmail = process.env.FILTER_EMAIL,
+    limit = parseInt(process.env.CUSTOMER_LIMIT || '100', 10),
+  } = options;
+
+  console.log('📧 Auto Label Email - Process All Customers\n');
+  console.log('============================================\n');
+
+  if (dryRun) {
+    console.log('⚠️  DRY RUN MODE - No labels will be applied\n');
+  }
+
+  const stripe = getStripe();
+  const geminiApiKey = await getGeminiApiKey();
+
+  console.log('📋 Configuration:');
+  console.log(`   Max emails per customer: ${maxEmails}`);
+  console.log(`   Lookback hours: ${lookbackHours}`);
+  console.log(`   Customer limit: ${limit}`);
+  if (filterEmail) {
+    console.log(`   Filter email: ${filterEmail}`);
+  }
+  console.log('');
+
+  // Fetch all active subscriptions
+  console.log('🔍 Fetching active subscriptions from Stripe...');
+  
+  const results: CustomerResult[] = [];
+  let hasMore = true;
+  let startingAfter: string | undefined;
+  let subscriptionCount = 0;
+
+  while (hasMore && subscriptionCount < limit) {
+    const subscriptions = await stripe.subscriptions.list({
+      status: 'active',
+      limit: Math.min(100, limit - subscriptionCount),
+      starting_after: startingAfter,
+      expand: ['data.customer'],
+    });
+
+    for (const subscription of subscriptions.data) {
+      if (subscriptionCount >= limit) break;
+      subscriptionCount++;
+
+      // Get customer from expanded data
+      const customer = subscription.customer as Stripe.Customer;
+      
+      if (!customer || customer.deleted) {
+        console.log(`\n[${subscriptionCount}] ⏭️  Skipping deleted customer`);
+        continue;
+      }
+
+      const customerId = customer.id;
+      const metadata = customer.metadata || {};
+
+      // Decrypt customer credentials
+      const encryptedRefreshToken = metadata.gmail_refresh_token;
+      const encryptedEmail = metadata.gmail_email;
+      const encryptedSheetId = metadata.google_sheet_id;
+
+      const refreshToken = safeDecrypt(encryptedRefreshToken);
+      const customerEmail = safeDecrypt(encryptedEmail);
+      const sheetId = safeDecrypt(encryptedSheetId);
+
+      // Skip if missing required fields
+      if (!refreshToken) {
+        console.log(`\n[${subscriptionCount}] ⏭️  Skipping ${customerId}: No refresh token`);
+        results.push({
+          customerId,
+          email: customerEmail || customer.email || 'unknown',
+          success: false,
+          error: 'No refresh token',
+        });
+        continue;
+      }
+
+      if (!customerEmail) {
+        console.log(`\n[${subscriptionCount}] ⏭️  Skipping ${customerId}: No email`);
+        results.push({
+          customerId,
+          email: customer.email || 'unknown',
+          success: false,
+          error: 'No email in metadata',
+        });
+        continue;
+      }
+
+      // Apply email filter if specified
+      if (filterEmail && customerEmail.toLowerCase() !== filterEmail.toLowerCase()) {
+        console.log(`\n[${subscriptionCount}] ⏭️  Skipping ${customerEmail}: Does not match filter`);
+        continue;
+      }
+
+      console.log(`\n[${subscriptionCount}] 📧 Processing ${customerEmail} (${customerId})`);
+
+      try {
+        // Build Google Sheets URL from sheet ID if provided
+        const googleSheetsUrl = sheetId
+          ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit`
+          : undefined;
+
+        await main({
+          emailAddress: customerEmail,
+          gmailRefreshToken: refreshToken,
+          geminiApiKey,
+          googleSheetsUrl,
+          dryRun,
+          maxEmails,
+          lookbackHours,
+          useInMemoryTracking: true, // Use in-memory tracking for batch processing
+        });
+
+        results.push({
+          customerId,
+          email: customerEmail,
+          success: true,
+        });
+      } catch (error: any) {
+        console.error(`   ❌ Error: ${error.message}`);
+        results.push({
+          customerId,
+          email: customerEmail,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    hasMore = subscriptions.has_more;
+    if (subscriptions.data.length > 0) {
+      startingAfter = subscriptions.data[subscriptions.data.length - 1].id;
+    }
+  }
+
+  // Print summary
+  console.log('\n============================================');
+  console.log('📊 Processing Summary\n');
+
+  const successful = results.filter(r => r.success);
+  const failed = results.filter(r => !r.success);
+
+  console.log(`✅ Successful: ${successful.length}`);
+  console.log(`❌ Failed: ${failed.length}`);
+  console.log(`📧 Total processed: ${results.length}`);
+
+  if (failed.length > 0) {
+    console.log('\n❌ Failed customers:');
+    for (const result of failed) {
+      console.log(`   - ${result.email} (${result.customerId}): ${result.error}`);
+    }
+  }
+
+  console.log('\n✅ All customers processed\n');
+}
+
+// Parse command line arguments
+function parseArgs(): ProcessingOptions {
+  const args = process.argv.slice(2);
+  const options: ProcessingOptions = {};
+
+  for (const arg of args) {
+    if (arg.startsWith('--email=')) {
+      options.filterEmail = arg.slice('--email='.length);
+    } else if (arg.startsWith('--max-emails=')) {
+      options.maxEmails = parseInt(arg.slice('--max-emails='.length), 10);
+    } else if (arg.startsWith('--lookback=')) {
+      options.lookbackHours = parseInt(arg.slice('--lookback='.length), 10);
+    } else if (arg.startsWith('--limit=')) {
+      options.limit = parseInt(arg.slice('--limit='.length), 10);
+    } else if (arg === '--dry-run') {
+      options.dryRun = true;
+    } else if (arg === '--help' || arg === '-h') {
+      console.log(`
+Usage: bun run scripts/process-all-customers.ts [options]
+
+Options:
+  --email=<email>       Process only this customer email
+  --max-emails=<n>      Max emails to process per customer (default: 20)
+  --lookback=<hours>    Hours to look back for emails (default: 24)
+  --limit=<n>           Max number of customers to process (default: 100)
+  --dry-run             Don't apply labels, just simulate
+  --help, -h            Show this help message
+
+Environment variables:
+  DRY_RUN               Set to 'true' for dry run mode
+  MAX_EMAILS            Max emails per customer
+  LOOKBACK_HOURS        Hours to look back
+  FILTER_EMAIL          Process only this customer email
+  CUSTOMER_LIMIT        Max customers to process
+`);
+      process.exit(0);
+    }
+  }
+
+  return options;
+}
+
+// Run if called directly
+if (require.main === module) {
+  const options = parseArgs();
+  processAllCustomers(options)
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((error: any) => {
+      console.error('\n❌ Fatal error:', error.message);
+      process.exit(1);
+    });
+}
+
+export { processAllCustomers };

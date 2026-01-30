@@ -14,6 +14,7 @@
     "get-token": "bun run scripts/get-refresh-token.ts",
     "healthcheck": "bun run scripts/healthcheck.ts",
     "process-emails": "bun run scripts/run-processor.ts",
+    "process-customers": "bun run scripts/process-all-customers.ts",
     "test-email": "bun run scripts/run-processor.ts --test",
     "test": "bun test $(find lib -name '*.test.ts' ! -name '*.network.test.ts')",
     "test:network": "bun test $(find . -name '*.network.test.ts')",
