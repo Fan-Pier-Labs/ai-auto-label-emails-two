@@ -9,8 +9,15 @@ export interface PendingSetupEntry {
  * Keyed by user email address
  *
  * In production, consider using Redis or a database instead
+ * 
+ * NOTE: Using globalThis to persist across Next.js hot reloads in development
  */
-const tokenStore = new Map<string, PendingSetupEntry>();
+const globalForTokenStore = globalThis as unknown as {
+  tokenStore: Map<string, PendingSetupEntry> | undefined;
+};
+
+const tokenStore = globalForTokenStore.tokenStore ?? new Map<string, PendingSetupEntry>();
+globalForTokenStore.tokenStore = tokenStore;
 
 const TOKEN_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 
