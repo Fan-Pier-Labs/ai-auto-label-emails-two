@@ -95,7 +95,7 @@ export function Options() {
               <p className="mb-3 sm:mb-4 text-xs sm:text-sm text-muted-foreground">Cancel anytime</p>
               <Button asChild className="w-full text-sm sm:text-base">
                 <Link href="/api/auth/gmail">
-                  <span className="hidden sm:inline">Get Started - not working yet, email ryan@fanpierlabs.com</span>
+                  <span className="hidden sm:inline">Get Started</span>
                   <span className="sm:hidden">Get Started - email ryan@fanpierlabs.com</span>
                 </Link>
               </Button>
