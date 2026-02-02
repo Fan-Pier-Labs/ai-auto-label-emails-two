@@ -160,3 +160,60 @@ async function matchSingleRuleWithGemini(
     return { match: false, reasoning: 'Error occurred', rawAnswer: 'no' };
   }
 }
+
+/**
+ * Build prompt for AI to decide whether deterministic check results match a user prompt.
+ * Used when applying deterministic-rule config: run all checks, then ask AI "given these facts, does the prompt apply?"
+ */
+export function buildDeterministicPromptPrompt(checkResults: RuleResult[], userPrompt: string): string {
+  const facts = checkResults
+    .map(r => `- ${r.ruleName}: ${r.matched ? 'matched' : 'not matched'} – ${r.reason}`)
+    .join('\n');
+  return `You are a strict classifier. Answer ONLY based on the following facts. Do not use external knowledge.
+
+Deterministic check results for an email's sender domain:
+${facts}
+
+User question: ${userPrompt}
+
+Based only on the facts above, should the label be applied? Respond with valid JSON only, no other text:
+{
+  "match": "yes" or "no",
+  "reason": "brief explanation"
+}`;
+}
+
+/**
+ * Ask Gemini whether the given deterministic check results satisfy the user prompt.
+ * Used to apply AI-prompt-driven deterministic rules (e.g. label "likely-scam" when prompt is "can it be a scam domain?").
+ */
+export async function matchDeterministicPromptWithGemini(
+  checkResults: RuleResult[],
+  userPrompt: string
+): Promise<{ match: boolean; reason: string }> {
+  const modelName = 'gemini-2.0-flash';
+  const fullPrompt = buildDeterministicPromptPrompt(checkResults, userPrompt);
+
+  try {
+    const text = await callGemini(modelName, fullPrompt);
+    try {
+      const parsed = JSON.parse(text) as { match?: string; reason?: string };
+      const matchValue = parsed.match?.toLowerCase().trim();
+      const match = matchValue === 'yes';
+      return { match, reason: parsed.reason || '' };
+    } catch {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as { match?: string; reason?: string };
+        const matchValue = parsed.match?.toLowerCase().trim();
+        const match = matchValue === 'yes';
+        return { match, reason: parsed.reason || '' };
+      }
+      console.error('[AI] Failed to parse deterministic prompt response:', text);
+      return { match: false, reason: 'Failed to parse response' };
+    }
+  } catch (error) {
+    console.error('[AI] Error in matchDeterministicPromptWithGemini:', error);
+    return { match: false, reason: 'Error occurred' };
+  }
+}

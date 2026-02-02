@@ -207,7 +207,6 @@ This document identifies gaps, improvements, and production readiness issues **o
 **Files with hardcoded values**:
 - `lib/token-store.ts` - `TOKEN_EXPIRY_MS = 30 * 60 * 1000`
 - `app/api/classify/route.ts` - `maxRequests: 20, windowMs: 60000`
-- `app/api/auth/gmail/callback/route.ts` - `STRIPE_CHECKOUT_URL`
 
 ### 15. Deployment Configuration
 

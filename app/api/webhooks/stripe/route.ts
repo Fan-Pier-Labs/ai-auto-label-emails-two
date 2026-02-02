@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { retrieveForWebhook } from '@/lib/token-store';
+import { encryptForStripe } from '@/lib/encryption';
 
 // Lazy initialization to avoid issues during build time
 function getStripe(): Stripe {
@@ -90,18 +91,20 @@ export async function POST(request: NextRequest) {
         customer.metadata && typeof customer.metadata === 'object'
           ? { ...customer.metadata }
           : {};
+      
+      // Encrypt sensitive metadata before storing in Stripe
       const metadata: Record<string, string> = {
         ...existingMetadata,
-        gmail_refresh_token: refreshToken,
-        gmail_email: customerEmail,
-        google_sheet_id: sheetId ?? '',
+        gmail_refresh_token: encryptForStripe(refreshToken),
+        gmail_email: encryptForStripe(customerEmail),
+        google_sheet_id: sheetId ? encryptForStripe(sheetId) : '',
         updated_at: new Date().toISOString(),
       };
       await stripe.customers.update(customerId, { metadata });
 
       console.log(
-        `✅ Updated Stripe customer ${customerId} with refresh token for ${customerEmail}` +
-          (sheetId ? ' and google_sheet_id' : '')
+        `✅ Updated Stripe customer ${customerId} with encrypted metadata for ${customerEmail}` +
+          (sheetId ? ' (includes google_sheet_id)' : '')
       );
 
       return NextResponse.json({ received: true, customerId });

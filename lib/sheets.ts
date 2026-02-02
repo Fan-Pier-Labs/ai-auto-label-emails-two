@@ -1,6 +1,43 @@
-import type { LabelRule, DeterministicRuleConfig, DeterministicRuleName } from './types';
+import type { LabelRule, DeterministicRuleConfig } from './types';
 import { withRetry } from './retry';
-import { DEFAULT_DETERMINISTIC_RULES, DETERMINISTIC_RULE_NAMES } from './types';
+
+/**
+ * Parse a CSV line respecting quoted fields (handles commas inside quotes).
+ * Returns array of field values.
+ */
+function parseCsvLine(line: string): string[] {
+  const parts: string[] = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      let end = i + 1;
+      const acc: string[] = [];
+      while (end < line.length) {
+        if (line[end] === '"') {
+          if (line[end + 1] === '"') {
+            acc.push('"');
+            end += 2;
+          } else {
+            end += 1;
+            break;
+          }
+        } else {
+          acc.push(line[end]);
+          end += 1;
+        }
+      }
+      parts.push(acc.join('').trim());
+      i = end;
+      if (line[i] === ',') i += 1;
+    } else {
+      const comma = line.indexOf(',', i);
+      const slice = comma === -1 ? line.slice(i) : line.slice(i, comma);
+      parts.push(slice.trim().replace(/^"|"$/g, ''));
+      i = comma === -1 ? line.length : comma + 1;
+    }
+  }
+  return parts;
+}
 
 async function fetchSheetRules(csvUrl: string): Promise<LabelRule[]> {
   const response = await fetch(csvUrl);
@@ -13,7 +50,7 @@ async function fetchSheetRules(csvUrl: string): Promise<LabelRule[]> {
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
+    const parts = parseCsvLine(line);
     if (parts.length >= 2) {
       const label = parts[0];
       const prompt = parts[1];
@@ -41,72 +78,58 @@ export async function fetchRulesFromSheet(spreadsheetId: string): Promise<LabelR
 }
 
 /**
- * Fetch deterministic rule configuration from a Google Sheet
- * Expects a sheet with columns: rule_name, enabled (or similar)
- * Uses the second sheet (gid=1) by default, falls back to looking for "deterministic" in sheet name
+ * Find column indices for deterministic rules (F=Enabled?, G=label name, H=AI Prompt)
+ * from the header row. We locate the "Enabled?" column (F) and use F, F+1, F+2 so we
+ * don't confuse column G "label name" with column A "Label Name".
  */
-async function fetchSheetDeterministicRules(csvUrl: string): Promise<DeterministicRuleConfig[]> {
-  const response = await fetch(csvUrl);
-  if (!response.ok) {
-    // If second sheet doesn't exist, return empty (use defaults)
-    if (response.status === 400) {
-      console.log('[Sheets] No deterministic rules sheet found, using defaults');
-      return [];
-    }
-    throw new Error(`Failed to fetch deterministic rules sheet: ${response.status} ${response.statusText}`);
+function findDeterministicColumnIndices(headerParts: string[]): { enabled: number; labelName: number; aiPrompt: number } {
+  const lower = headerParts.map(p => p.trim().toLowerCase());
+  const enabledCol = lower.findIndex(
+    h => h === 'enabled?' || h === 'enabled' || h === 'enable' || h === 'active' || h === 'on'
+  );
+  if (enabledCol >= 0) {
+    return {
+      enabled: enabledCol,
+      labelName: enabledCol + 1,
+      aiPrompt: enabledCol + 2,
+    };
   }
-  const csvText = await response.text();
-  const lines = csvText.trim().split('\n');
+  return { enabled: 5, labelName: 6, aiPrompt: 7 };
+}
+
+/**
+ * Parse deterministic rule config from main sheet rows (columns F, G, H).
+ * F = Enabled?, G = label (any string), H = AI Prompt (required).
+ * Only rows with non-empty label and prompt are included.
+ * Column indices are detected from the header row.
+ * Exported for tests and for parsing example CSV files.
+ */
+export function parseDeterministicRulesFromRows(lines: string[]): DeterministicRuleConfig[] {
   const rules: DeterministicRuleConfig[] = [];
+  if (lines.length < 2) return rules;
 
-  // Parse header to find column indices
-  if (lines.length === 0) return [];
-  
-  const headerLine = lines[0].toLowerCase();
-  const headerParts = headerLine.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
-  
-  // Find columns - support various naming conventions
-  let ruleNameCol = headerParts.findIndex(h => 
-    h === 'rule_name' || h === 'rulename' || h === 'rule' || h === 'name'
-  );
-  let enabledCol = headerParts.findIndex(h => 
-    h === 'enabled' || h === 'enable' || h === 'active' || h === 'on'
-  );
-
-  // If no header found, assume first two columns
-  if (ruleNameCol === -1) ruleNameCol = 0;
-  if (enabledCol === -1) enabledCol = 1;
+  const headerParts = parseCsvLine(lines[0].trim());
+  const cols = findDeterministicColumnIndices(headerParts);
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    
-    const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, ''));
-    const ruleName = parts[ruleNameCol]?.toLowerCase();
-    const enabledStr = parts[enabledCol]?.toLowerCase();
+    const parts = parseCsvLine(line);
+    const enabledStr = parts[cols.enabled]?.trim().toLowerCase() ?? '';
+    const label = parts[cols.labelName]?.trim() ?? '';
+    const prompt = parts[cols.aiPrompt]?.trim() ?? '';
 
-    if (!ruleName) continue;
+    if (!label || !prompt) continue;
 
-    // Check if this is a valid deterministic rule name
-    if (!DETERMINISTIC_RULE_NAMES.includes(ruleName as DeterministicRuleName)) {
-      console.log(`[Sheets] Unknown deterministic rule: ${ruleName}, skipping`);
-      continue;
-    }
+    const enabled =
+      enabledStr === 'true' ||
+      enabledStr === 'yes' ||
+      enabledStr === '1' ||
+      enabledStr === 'on' ||
+      enabledStr === 'y';
 
-    // Parse enabled value - support various formats
-    const enabled = enabledStr === 'true' || 
-                    enabledStr === 'yes' || 
-                    enabledStr === '1' || 
-                    enabledStr === 'on' ||
-                    enabledStr === 'y';
-
-    rules.push({ 
-      ruleName: ruleName as DeterministicRuleName, 
-      enabled 
-    });
+    rules.push({ label, enabled, prompt });
   }
-
-  console.log(`[Sheets] Loaded ${rules.length} deterministic rule configs from spreadsheet`);
   return rules;
 }
 
@@ -134,45 +157,37 @@ export function extractSpreadsheetId(urlOrId: string): string {
 }
 
 /**
- * Fetch deterministic rules configuration from Google Sheets
- * Uses the second sheet (gid=1) to read rule enable/disable settings
- * Returns array of DeterministicRuleConfig with merged defaults
+ * Fetch deterministic rules configuration from Google Sheets.
+ * Reads columns F (Enabled?), G (label), H (AI Prompt) from the main sheet
+ * (same sheet as AI rules). No separate tab is used.
+ * Returns parsed rows only; rows with empty label or prompt are skipped. Empty sheet returns [].
  */
 export async function fetchDeterministicRulesConfig(spreadsheetId: string): Promise<DeterministicRuleConfig[]> {
-  // Fetch from second sheet (gid=1) - deterministic rules config
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=1`;
-  
-  try {
-    const rules = await withRetry(() => fetchSheetDeterministicRules(csvUrl), {
-      maxAttempts: 2,
-      initialDelayMs: 500,
-      maxDelayMs: 2000,
-    });
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
 
-    // Merge with defaults - sheet values override defaults
-    const result: DeterministicRuleConfig[] = [];
-    for (const ruleName of DETERMINISTIC_RULE_NAMES) {
-      const sheetRule = rules.find(r => r.ruleName === ruleName);
-      const enabled = sheetRule !== undefined 
-        ? sheetRule.enabled 
-        : DEFAULT_DETERMINISTIC_RULES[ruleName];
-      result.push({ ruleName, enabled });
-    }
-    
-    return result;
+  try {
+    const response = await withRetry(
+      () =>
+        fetch(csvUrl).then(async res => {
+          if (!res.ok) throw new Error(`Sheet fetch failed: ${res.status} ${res.statusText}`);
+          return res.text();
+        }),
+      { maxAttempts: 2, initialDelayMs: 500, maxDelayMs: 2000 }
+    );
+    const lines = response.trim().split('\n');
+    const rules = parseDeterministicRulesFromRows(lines);
+    const enabledCount = rules.filter(r => r.enabled).length;
+    console.log(`[Sheets] Loaded ${rules.length} deterministic rule configs from columns F,G,H (${enabledCount} enabled)`);
+    return rules;
   } catch (error) {
     console.error('[Sheets] Error fetching deterministic rules config:', error);
-    // Return defaults on error
-    return DETERMINISTIC_RULE_NAMES.map(ruleName => ({
-      ruleName,
-      enabled: DEFAULT_DETERMINISTIC_RULES[ruleName],
-    }));
+    return [];
   }
 }
 
 /**
- * Get enabled deterministic rule names as a Set for quick lookup
+ * Get enabled deterministic rule labels as a Set for quick lookup
  */
 export function getEnabledDeterministicRules(config: DeterministicRuleConfig[]): Set<string> {
-  return new Set(config.filter(r => r.enabled).map(r => r.ruleName));
+  return new Set(config.filter(r => r.enabled).map(r => r.label));
 }

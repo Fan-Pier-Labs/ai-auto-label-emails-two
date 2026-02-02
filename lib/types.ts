@@ -47,8 +47,9 @@ export interface RuleResult {
 }
 
 export interface DeterministicRuleConfig {
-  ruleName: string;
+  label: string;
   enabled: boolean;
+  prompt: string;
 }
 
 /**

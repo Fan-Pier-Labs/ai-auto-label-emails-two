@@ -54,19 +54,20 @@ async function main(params: MainParams): Promise<void> {
       }
     } catch (error: any) {
       if (error.code === 'ENOENT') {
-        throw new Error(
-          '❌ google_creds.json not found!\n\n' +
-          'Please create google_creds.json in the project root with your OAuth credentials.\n' +
-          'Download it from: https://console.cloud.google.com/apis/credentials'
-        );
+        // Fallback to environment variables
+        gmailClientId = process.env.GMAIL_CLIENT_ID;
+        gmailClientSecret = process.env.GMAIL_CLIENT_SECRET;
+      } else {
+        throw new Error(`❌ Error reading google_creds.json: ${error.message}`);
       }
-      throw new Error(`❌ Error reading google_creds.json: ${error.message}`);
     }
 
     if (!gmailClientId || !gmailClientSecret) {
       throw new Error(
-        '❌ Missing client_id or client_secret in google_creds.json!\n\n' +
-        'Make sure google_creds.json has either "web" or "installed" section with client_id and client_secret.'
+        '❌ Missing Google OAuth credentials!\n\n' +
+        'Either:\n' +
+        '1. Create google_creds.json in the project root (download from https://console.cloud.google.com/apis/credentials), or\n' +
+        '2. Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET environment variables'
       );
     }
 

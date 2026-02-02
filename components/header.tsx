@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button"
 
 export function Header() {
   return (
-    <header className="border-b border-border bg-card">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+    <header className="border-b border-border bg-card overflow-hidden max-w-[100vw]">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
         <Link href="/" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <Mail className="h-4 w-4 text-primary-foreground" />
@@ -17,13 +17,13 @@ export function Header() {
         
         <nav className="hidden items-center gap-6 md:flex">
           <Link 
-            href="#features" 
+            href="/#features" 
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             Features
           </Link>
           <Link 
-            href="#options" 
+            href="/#options" 
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             Get Started
@@ -38,7 +38,7 @@ export function Header() {
         </nav>
 
         <Button asChild size="sm">
-          <Link href="#options">Get Started</Link>
+          <Link href="/#options">Get Started</Link>
         </Button>
       </div>
     </header>
