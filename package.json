@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "bun run scripts/start.ts",
     "lint": "next lint",
     "bun:dev": "bun --bun next dev",
     "bun:build": "bun --bun next build",

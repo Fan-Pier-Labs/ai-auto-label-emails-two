@@ -165,6 +165,8 @@ export function extractSpreadsheetId(urlOrId: string): string {
 export async function fetchDeterministicRulesConfig(spreadsheetId: string): Promise<DeterministicRuleConfig[]> {
   const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
 
+  console.log(`[Sheets] Fetching deterministic rules config from ${csvUrl}`);
+
   try {
     const response = await withRetry(
       () =>
@@ -178,6 +180,17 @@ export async function fetchDeterministicRulesConfig(spreadsheetId: string): Prom
     const rules = parseDeterministicRulesFromRows(lines);
     const enabledCount = rules.filter(r => r.enabled).length;
     console.log(`[Sheets] Loaded ${rules.length} deterministic rule configs from columns F,G,H (${enabledCount} enabled)`);
+    if (rules.length === 0 && lines.length >= 2) {
+      const headerParts = parseCsvLine(lines[0].trim());
+      const cols = findDeterministicColumnIndices(headerParts);
+      const firstRowParts = parseCsvLine(lines[1].trim());
+      const p = (firstRowParts[cols.aiPrompt] ?? '').trim();
+      const promptPreview = p.length > 35 ? p.slice(0, 32) + '...' : p;
+      console.log(
+        `[Sheets] Debug: header has ${headerParts.length} columns; deterministic cols at indices ${cols.enabled},${cols.labelName},${cols.aiPrompt}. ` +
+          `First row enabled="${firstRowParts[cols.enabled] ?? ''}" label="${firstRowParts[cols.labelName] ?? ''}" prompt="${promptPreview}"`
+      );
+    }
     return rules;
   } catch (error) {
     console.error('[Sheets] Error fetching deterministic rules config:', error);
@@ -190,4 +203,15 @@ export async function fetchDeterministicRulesConfig(spreadsheetId: string): Prom
  */
 export function getEnabledDeterministicRules(config: DeterministicRuleConfig[]): Set<string> {
   return new Set(config.filter(r => r.enabled).map(r => r.label));
+}
+
+
+async function test() {
+  const spreadsheetId = '1oRvLEi2uj0ENbJ42EyINLzWcbC92HwGriMq5ejKhXYM';
+  const rules = await fetchDeterministicRulesConfig(spreadsheetId);
+  console.log(rules);
+}
+
+if (require.main === module) {
+  test();
 }

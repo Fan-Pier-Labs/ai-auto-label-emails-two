@@ -213,7 +213,7 @@ async function test(): Promise<void> {
     const processedLabel = process.env.PROCESSED_LABEL || '__auto-processed__';
     const dryRun = process.env.DRY_RUN !== undefined ? process.env.DRY_RUN === 'true' : true; // Default: true
     const maxEmails = 50
-    const lookbackHours = 60
+    const lookbackHours = 200
     const useInMemoryTracking = process.env.USE_IN_MEMORY_TRACKING !== undefined ? process.env.USE_IN_MEMORY_TRACKING === 'true' : true; // Default: true
 
     // --run-on-spam-folder: process emails in spam folder instead of inbox

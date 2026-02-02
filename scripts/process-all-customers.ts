@@ -171,6 +171,17 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
       expand: ['data.customer'],
     });
 
+    if (subscriptionCount === 0 && subscriptions.data.length === 0) {
+      console.log(
+        '\n⚠️  No active subscriptions found in Stripe.\n' +
+          '   Customers are loaded from Stripe subscriptions (status=active).\n' +
+          '   • Check your Stripe Dashboard → Customers / Subscriptions.\n' +
+          '   • Ensure STRIPE_SECRET_KEY matches the account (test vs live key).\n'
+      );
+    } else if (subscriptions.data.length > 0 && subscriptionCount === 0) {
+      console.log(`   Found ${subscriptions.data.length} active subscription(s).`);
+    }
+
     for (const subscription of subscriptions.data) {
       if (subscriptionCount >= limit) break;
       subscriptionCount++;

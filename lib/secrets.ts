@@ -1,25 +1,37 @@
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
-const GEMINI_API_KEY_SECRET_ARN = 'arn:aws:secretsmanager:us-east-2:555985150976:secret:GEMINI_API_KEY-Wtqpz8';
+const APP_SECRETS_ARN = 'arn:aws:secretsmanager:us-east-2:555985150976:secret:AI_EMAIL_LABELING_APP-lBzZpo';
+
+// Secrets that should be loaded from AWS Secrets Manager
+const SECRET_KEYS = [
+  'STRIPE_PRICE_ID',
+  'GEMINI_API_KEY',
+  'STRIPE_METADATA_ENCRYPTION_KEY',
+  'STRIPE_SECRET_KEY',
+] as const;
+
+type SecretKey = typeof SECRET_KEYS[number];
+
+let secretsLoaded = false;
 
 /**
- * Fetches a secret from AWS Secrets Manager
+ * Fetches the consolidated secrets JSON from AWS Secrets Manager
  */
-async function getSecretFromAWS(secretArn: string): Promise<string> {
+async function getSecretsFromAWS(): Promise<Record<string, string>> {
   try {
     const client = new SecretsManagerClient({ region: 'us-east-2' });
-    const command = new GetSecretValueCommand({ SecretId: secretArn });
+    const command = new GetSecretValueCommand({ SecretId: APP_SECRETS_ARN });
     const response = await client.send(command);
     
     if (!response.SecretString) {
       throw new Error('Secret value is empty or not a string');
     }
     
-    // Trim whitespace and newlines that might be present in the secret value
-    return response.SecretString.trim();
+    const secrets = JSON.parse(response.SecretString.trim()) as Record<string, string>;
+    return secrets;
   } catch (error: any) {
     throw new Error(
-      `❌ Failed to fetch secret from AWS Secrets Manager: ${error.message}\n\n` +
+      `❌ Failed to fetch secrets from AWS Secrets Manager: ${error.message}\n\n` +
       `Make sure AWS credentials are configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)\n` +
       `or use AWS IAM role if running on EC2/ECS/Lambda`
     );
@@ -27,50 +39,77 @@ async function getSecretFromAWS(secretArn: string): Promise<string> {
 }
 
 /**
- * Gets the GEMINI_API_KEY from environment variable or AWS Secrets Manager
- * Checks environment variable first, then falls back to AWS Secrets Manager if not found
+ * Loads all secrets from AWS Secrets Manager and sets them as environment variables.
+ * Only fetches secrets that are not already set in environment.
+ * Call this once at application startup.
+ */
+export async function loadSecretsFromAWS(): Promise<void> {
+  if (secretsLoaded) {
+    return;
+  }
+
+  // Check which secrets are missing from environment
+  const missingSecrets = SECRET_KEYS.filter(key => !process.env[key]);
+  
+  if (missingSecrets.length === 0) {
+    console.log('✅ All secrets already set in environment');
+    secretsLoaded = true;
+    return;
+  }
+
+  console.log(`🔐 Loading secrets from AWS Secrets Manager: ${missingSecrets.join(', ')}`);
+  
+  try {
+    const secrets = await getSecretsFromAWS();
+    
+    for (const key of missingSecrets) {
+      if (secrets[key]) {
+        process.env[key] = secrets[key].trim();
+        console.log(`   ✅ Loaded ${key}`);
+      } else {
+        console.warn(`   ⚠️  ${key} not found in AWS Secrets Manager`);
+      }
+    }
+    
+    secretsLoaded = true;
+    console.log('✅ Secrets loaded from AWS Secrets Manager');
+  } catch (error: any) {
+    throw new Error(
+      `❌ Failed to load secrets from AWS Secrets Manager!\n\n` +
+      `Error: ${error.message}\n\n` +
+      `Either:\n` +
+      `1. Set environment variables directly, or\n` +
+      `2. Ensure AWS credentials are configured and the secret exists at:\n` +
+      `   ${APP_SECRETS_ARN}`
+    );
+  }
+}
+
+/**
+ * Gets the GEMINI_API_KEY from environment variable.
+ * Call loadSecretsFromAWS() at startup to ensure this is populated.
  */
 export async function getGeminiApiKey(): Promise<string> {
-  // First, check environment variable
   const envKey = process.env.GEMINI_API_KEY;
   if (envKey) {
     return envKey.trim();
   }
 
-  // If not in environment, fetch from AWS Secrets Manager
-  console.log('🔐 GEMINI_API_KEY not found in environment, fetching from AWS Secrets Manager...');
-  try {
-    const raw = await getSecretFromAWS(GEMINI_API_KEY_SECRET_ARN);
-    if (!raw) {
-      throw new Error('GEMINI_API_KEY secret is empty in AWS Secrets Manager');
-    }
-    // Secret may be stored as plain key or as JSON e.g. {"GEMINI_API_KEY":"..."}
-    let secret = raw;
-    const trimmed = raw.trim();
-    if (trimmed.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(trimmed) as { GEMINI_API_KEY?: string };
-        if (parsed.GEMINI_API_KEY) {
-          secret = parsed.GEMINI_API_KEY.trim();
-        }
-      } catch {
-        // Not valid JSON, use raw
-      }
-    }
-    if (!secret) {
-      throw new Error('GEMINI_API_KEY secret is empty in AWS Secrets Manager');
-    }
-    console.log('✅ GEMINI_API_KEY fetched from AWS Secrets Manager');
-    return secret;
-  } catch (error: any) {
-    throw new Error(
-      `❌ Failed to get GEMINI_API_KEY!\n\n` +
-      `Environment variable GEMINI_API_KEY is not set and failed to fetch from AWS Secrets Manager.\n` +
-      `Error: ${error.message}\n\n` +
-      `Either:\n` +
-      `1. Set GEMINI_API_KEY environment variable, or\n` +
-      `2. Ensure AWS credentials are configured and the secret exists in AWS Secrets Manager\n` +
-      `Get your key from: https://makersuite.google.com/app/apikey`
-    );
-  }
+  throw new Error(
+    `❌ GEMINI_API_KEY not found in environment!\n\n` +
+    `Make sure loadSecretsFromAWS() was called at startup, or set GEMINI_API_KEY directly.\n` +
+    `Get your key from: https://makersuite.google.com/app/apikey`
+  );
+}
+
+
+async function test() {
+  let result = await getSecretsFromAWS();
+  console.log(result);
+  const geminiApiKey = await getGeminiApiKey();
+  console.log(geminiApiKey);
+}
+
+if (require.main === module) {
+  test();
 }
