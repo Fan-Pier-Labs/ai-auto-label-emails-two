@@ -36,10 +36,10 @@ export async function POST(request: NextRequest) {
 
     const stripe = getStripe();
 
-    // Get the base URL for redirects
-    const protocol = request.headers.get('x-forwarded-proto') ?? 'http';
-    const host = request.headers.get('host') ?? 'localhost:3000';
-    const baseUrl = `${protocol}://${host}`;
+    // Get the base URL for redirects (use NEXT_APP_URL in production)
+    const baseUrl = process.env.NEXT_APP_URL
+      ? process.env.NEXT_APP_URL.replace(/\/$/, '')
+      : request.nextUrl.origin;
 
     // Create a Stripe checkout session with customer_email prefilled
     // When customer_email is provided, the email field is non-editable in checkout

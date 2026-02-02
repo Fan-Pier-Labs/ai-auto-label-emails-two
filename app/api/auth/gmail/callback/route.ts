@@ -48,7 +48,17 @@ function getOAuthCredentials(): { clientId: string; clientSecret: string } {
   throw new Error('Gmail OAuth credentials not found in environment variables or google_creds.json');
 }
 
+/** Base URL for redirects (use NEXT_APP_URL in production so redirects go to the public host, not internal) */
+function getBaseUrl(request: NextRequest): string {
+  if (process.env.NEXT_APP_URL) {
+    return process.env.NEXT_APP_URL.replace(/\/$/, '');
+  }
+  return request.nextUrl.origin;
+}
+
 export async function GET(request: NextRequest) {
+  const baseUrl = getBaseUrl(request);
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
@@ -58,29 +68,23 @@ export async function GET(request: NextRequest) {
     // Check for OAuth errors
     if (error) {
       console.error('OAuth error:', error);
-      return NextResponse.redirect(
-        new URL('/?error=oauth_denied', request.url)
-      );
+      return NextResponse.redirect(`${baseUrl}/?error=oauth_denied`);
     }
 
     // Verify state token
     const storedState = request.cookies.get('oauth_state')?.value;
     if (!state || !storedState || state !== storedState) {
       console.error('Invalid state token');
-      return NextResponse.redirect(
-        new URL('/?error=invalid_state', request.url)
-      );
+      return NextResponse.redirect(`${baseUrl}/?error=invalid_state`);
     }
 
     if (!code) {
-      return NextResponse.redirect(
-        new URL('/?error=no_code', request.url)
-      );
+      return NextResponse.redirect(`${baseUrl}/?error=no_code`);
     }
 
     const { clientId, clientSecret } = getOAuthCredentials();
 
-    const redirectUri = `${process.env.NEXT_APP_URL}/api/auth/gmail/callback`;
+    const redirectUri = `${process.env.NEXT_APP_URL || baseUrl}/api/auth/gmail/callback`;
 
     // Create OAuth2 client
     const oauth2Client = new google.auth.OAuth2(
@@ -94,9 +98,7 @@ export async function GET(request: NextRequest) {
 
     if (!tokens.refresh_token) {
       console.error('No refresh token received');
-      return NextResponse.redirect(
-        new URL('/?error=no_refresh_token', request.url)
-      );
+      return NextResponse.redirect(`${baseUrl}/?error=no_refresh_token`);
     }
 
     // Set credentials to get user info
@@ -120,8 +122,8 @@ export async function GET(request: NextRequest) {
       console.error('❌ Error getting user email from Gmail API:', error);
     }
 
-    // Redirect to /setup so user can enter sheet URL; set email cookie for /setup form
-    const setupUrl = new URL('/setup', request.url);
+    // Redirect to /setup so user lands on the public URL, not internal host
+    const setupUrl = `${baseUrl}/setup`;
     const response = NextResponse.redirect(setupUrl);
     response.cookies.delete('oauth_state');
 
@@ -138,8 +140,6 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error('Error in OAuth callback:', error);
-    return NextResponse.redirect(
-      new URL('/?error=oauth_failed', request.url)
-    );
+    return NextResponse.redirect(`${baseUrl}/?error=oauth_failed`);
   }
 }

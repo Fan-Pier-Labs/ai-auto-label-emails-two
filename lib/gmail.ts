@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
+import { getAppBaseUrl } from './app-url';
 import type { Email } from './types';
 import { withRetry } from './retry';
 
@@ -18,7 +19,7 @@ export async function initializeGmail(config: GmailConfig): Promise<void> {
   oauth2Client = new google.auth.OAuth2(
     config.clientId,
     config.clientSecret,
-    'http://localhost:8080'
+    `${getAppBaseUrl()}/api/auth/gmail/callback`
   );
 
   oauth2Client.setCredentials({

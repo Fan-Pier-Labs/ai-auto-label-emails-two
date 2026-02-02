@@ -57,11 +57,12 @@ export async function GET(request: NextRequest) {
     // Fallback to dynamic construction for local development
     let redirectUri: string;
     if (process.env.NEXT_APP_URL) {
-      redirectUri = `${process.env.NEXT_APP_URL}/api/auth/gmail/callback`;
+      const base = process.env.NEXT_APP_URL.replace(/\/$/, '');
+      redirectUri = `${base}/api/auth/gmail/callback`;
+      console.log(`[OAuth] Using NEXT_APP_URL: ${redirectUri}`);
     } else {
-      const protocol = request.headers.get('x-forwarded-proto') || 'http';
-      const host = request.headers.get('host') || 'localhost:3000';
-      redirectUri = `${protocol}://${host}/api/auth/gmail/callback`;
+      redirectUri = `${request.nextUrl.origin}/api/auth/gmail/callback`;
+      console.log(`[OAuth] NEXT_APP_URL not set, using request origin: ${redirectUri}`);
     }
 
     // Generate state token for CSRF protection

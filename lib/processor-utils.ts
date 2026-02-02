@@ -14,6 +14,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { promises as dns } from 'dns';
 import { lookup as whoisLookup } from 'whois';
 import { createConnection } from 'net';
+import { getAppBaseUrl } from './app-url';
 import { withRetry } from './retry';
 import { initializeGmail } from './gmail';
 import { initializeGemini } from './gemini';
@@ -93,7 +94,7 @@ export class ProcessingSession {
     this.oauth2Client = new google.auth.OAuth2(
       this.config.gmail.clientId,
       this.config.gmail.clientSecret,
-      'http://localhost:8080'
+      `${getAppBaseUrl()}/api/auth/gmail/callback`
     );
     this.oauth2Client.setCredentials({
       refresh_token: this.config.gmail.refreshToken,

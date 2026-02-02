@@ -5,7 +5,7 @@ import { loadSecretsFromAWS } from '../lib/secrets';
 import { processAllCustomers } from './process-all-customers';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = parseInt(process.env.PORT || '8080', 10);
 
 /**
  * Starts the hourly customer processor loop
@@ -36,7 +36,8 @@ async function startNextServer(): Promise<void> {
   });
   
   server.listen(PORT, () => {
-    console.log(`[${new Date().toISOString()}] Next.js server running on http://localhost:${PORT}`);
+    const baseUrl = process.env.NEXT_APP_URL?.replace(/\/$/, '') ?? `http://localhost:${PORT}`;
+    console.log(`[${new Date().toISOString()}] Next.js server running on ${baseUrl}`);
   });
 }
 
