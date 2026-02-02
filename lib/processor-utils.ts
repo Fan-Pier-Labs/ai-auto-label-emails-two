@@ -243,25 +243,45 @@ export class ProcessingSession {
     });
   }
 
+  private findLabelByName(
+    labels: { id?: string | null; name?: string | null }[],
+    labelName: string
+  ): { id?: string | null } | null {
+    const normalized = labelName.trim().toLowerCase();
+    const found = labels.find(l => (l.name ?? '').trim().toLowerCase() === normalized);
+    return found ?? null;
+  }
+
   private async getOrCreateLabel(labelName: string): Promise<string> {
     const gmail = this.getGmail();
     const response = await gmail.users.labels.list({ userId: 'me' });
     const labels = response.data.labels || [];
-    const existingLabel = labels.find(l => l.name === labelName);
+    const existingLabel = this.findLabelByName(labels, labelName);
 
-    if (existingLabel) {
-      return existingLabel.id!;
+    if (existingLabel?.id) {
+      return existingLabel.id;
     }
 
-    const createResponse = await gmail.users.labels.create({
-      userId: 'me',
-      requestBody: {
-        name: labelName,
-        labelListVisibility: 'labelShow',
-        messageListVisibility: 'show',
-      },
-    });
-    return createResponse.data.id!;
+    try {
+      const createResponse = await gmail.users.labels.create({
+        userId: 'me',
+        requestBody: {
+          name: labelName,
+          labelListVisibility: 'labelShow',
+          messageListVisibility: 'show',
+        },
+      });
+      return createResponse.data.id!;
+    } catch (err: unknown) {
+      const code = (err as { code?: number; status?: number }).code ?? (err as { code?: number; status?: number }).status;
+      if (code === 409) {
+        const retryResponse = await gmail.users.labels.list({ userId: 'me' });
+        const retryLabels = retryResponse.data.labels || [];
+        const found = this.findLabelByName(retryLabels, labelName);
+        if (found?.id) return found.id;
+      }
+      throw err;
+    }
   }
 
   async hasReceivedFromDomain(domain: string, excludeEmailId?: string): Promise<boolean> {

@@ -275,26 +275,47 @@ export async function applyLabels(messageId: string, labelNames: string[]): Prom
   );
 }
 
+function normalizeLabel(name: string): string {
+  // Gmail treats hyphens and spaces as equivalent for conflict detection
+  return name.trim().toLowerCase().replace(/[-\s]+/g, ' ');
+}
+
+function findLabelByName(labels: { id?: string | null; name?: string | null }[], labelName: string) {
+  const normalized = normalizeLabel(labelName);
+  return labels.find(l => normalizeLabel(l.name ?? '') === normalized) ?? null;
+}
+
 async function getOrCreateLabelCore(
   gmail: ReturnType<typeof google.gmail>,
   labelName: string
 ): Promise<string> {
   const response = await gmail.users.labels.list({ userId: 'me' });
   const labels = response.data.labels || [];
-  const existingLabel = labels.find(l => l.name === labelName);
+  const existingLabel = findLabelByName(labels, labelName);
   if (existingLabel) {
     return existingLabel.id!;
   }
-  const createResponse = await gmail.users.labels.create({
-    userId: 'me',
-    requestBody: {
-      name: labelName,
-      labelListVisibility: 'labelShow',
-      messageListVisibility: 'show',
-    },
-  });
-  console.log(`[Gmail] Created new label: ${labelName}`);
-  return createResponse.data.id!;
+  try {
+    const createResponse = await gmail.users.labels.create({
+      userId: 'me',
+      requestBody: {
+        name: labelName,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+      },
+    });
+    console.log(`[Gmail] Created new label: ${labelName}`);
+    return createResponse.data.id!;
+  } catch (err: unknown) {
+    const code = (err as { code?: number; status?: number }).code ?? (err as { code?: number; status?: number }).status;
+    if (code === 409) {
+      const retryResponse = await gmail.users.labels.list({ userId: 'me' });
+      const retryLabels = retryResponse.data.labels || [];
+      const found = findLabelByName(retryLabels, labelName);
+      if (found?.id) return found.id;
+    }
+    throw err;
+  }
 }
 
 /**
@@ -394,4 +415,34 @@ export async function buildEmailHistory(): Promise<{
     console.error('[Gmail] Error building email history:', error);
     throw error;
   }
+}
+
+if (require.main === module) {
+  (async () => {
+    // Load env vars
+    const dotenv = await import('dotenv');
+    dotenv.config();
+
+    const clientId = process.env.RYAN_GMAIL_CLIENT_ID;
+    const clientSecret = process.env.RYAN_GMAIL_CLIENT_SECRET;
+    const refreshToken = process.env.RYAN_GMAIL_REFRESH_TOKEN;
+
+    if (!clientId || !clientSecret || !refreshToken) {
+      console.error('Missing required env vars: RYAN_GMAIL_CLIENT_ID, RYAN_GMAIL_CLIENT_SECRET, RYAN_GMAIL_REFRESH_TOKEN');
+      process.exit(1);
+    }
+
+    // Initialize FIRST, then get client
+    await initializeGmail({ clientId, clientSecret, refreshToken });
+
+    const client = getClient();
+    const gmail = google.gmail({ version: 'v1', auth: client });
+
+    try {
+      const label = await getOrCreateLabelCore(gmail, 'Has-Unsubscribe');
+      console.log('Label ID:', label);
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  })();
 }
