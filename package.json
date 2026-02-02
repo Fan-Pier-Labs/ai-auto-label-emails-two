@@ -4,7 +4,7 @@
   "description": "Auto label emails with AI - Next.js app with Gemini AI",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "bun run scripts/dev.ts",
     "build": "next build",
     "start": "bun run scripts/start.ts",
     "lint": "next lint",
