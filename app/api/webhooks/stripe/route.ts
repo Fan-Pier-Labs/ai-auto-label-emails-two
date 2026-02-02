@@ -92,11 +92,11 @@ export async function POST(request: NextRequest) {
           ? { ...customer.metadata }
           : {};
       
-      // Encrypt sensitive metadata before storing in Stripe
+      // Encrypt sensitive metadata before storing in Stripe (gmail_email stored unencrypted)
       const metadata: Record<string, string> = {
         ...existingMetadata,
         gmail_refresh_token: encryptForStripe(refreshToken),
-        gmail_email: encryptForStripe(customerEmail),
+        gmail_email: customerEmail,
         google_sheet_id: sheetId ? encryptForStripe(sheetId) : '',
         updated_at: new Date().toISOString(),
       };

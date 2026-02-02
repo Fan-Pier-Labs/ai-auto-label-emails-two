@@ -212,9 +212,16 @@ async function test(): Promise<void> {
     const googleSheetsUrl = 'https://docs.google.com/spreadsheets/d/1T9vwarXB3ICksZpP4gHw-rllKve0j2tKBDEEEsIVEAM/edit?gid=0#gid=0'
     const processedLabel = process.env.PROCESSED_LABEL || '__auto-processed__';
     const dryRun = process.env.DRY_RUN !== undefined ? process.env.DRY_RUN === 'true' : true; // Default: true
-    const maxEmails = 20
-    const lookbackHours = 30
+    const maxEmails = 50
+    const lookbackHours = 60
     const useInMemoryTracking = process.env.USE_IN_MEMORY_TRACKING !== undefined ? process.env.USE_IN_MEMORY_TRACKING === 'true' : true; // Default: true
+
+    // --run-on-spam-folder: process emails in spam folder instead of inbox
+    const runOnSpamFolder = process.argv.includes('--run-on-spam-folder');
+    const query = runOnSpamFolder ? 'in:spam' : 'in:inbox';
+    if (runOnSpamFolder) {
+      console.log('📬 Running on SPAM folder\n');
+    }
 
     // Call main with user's parameters
     await main({
@@ -224,7 +231,7 @@ async function test(): Promise<void> {
       googleSheetsUrl,
       processedLabel,
       dryRun,
-      query: 'in:inbox',
+      query,
       maxEmails,
       lookbackHours,
       useInMemoryTracking,

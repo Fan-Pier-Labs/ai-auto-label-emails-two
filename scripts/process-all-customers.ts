@@ -192,13 +192,12 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
       const customerId = customer.id;
       const metadata = customer.metadata || {};
 
-      // Decrypt customer credentials
+      // Decrypt customer credentials (gmail_email is stored unencrypted)
       const encryptedRefreshToken = metadata.gmail_refresh_token;
-      const encryptedEmail = metadata.gmail_email;
       const encryptedSheetId = metadata.google_sheet_id;
 
       const refreshToken = safeDecrypt(encryptedRefreshToken);
-      const customerEmail = safeDecrypt(encryptedEmail);
+      const customerEmail = metadata.gmail_email;
       const sheetId = safeDecrypt(encryptedSheetId);
 
       // Skip if missing required fields
