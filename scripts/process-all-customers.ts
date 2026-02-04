@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { config } from 'dotenv';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { decryptFromStripe, isEncrypted } from '../lib/encryption';
+import { safeDecrypt } from '../lib/encryption';
 import { getGeminiApiKey } from '../lib/secrets';
 import { ProcessingSession } from '../lib/processor-utils';
 import { analytics } from '../lib/analytics';
@@ -89,27 +89,6 @@ function getOAuthCredentials(): { clientId: string; clientSecret: string } {
     '1. Create google_creds.json in the project root (download from https://console.cloud.google.com/apis/credentials), or\n' +
     '2. Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET environment variables'
   );
-}
-
-/**
- * Safely decrypts a metadata value, returning undefined if empty or invalid
- */
-function safeDecrypt(value: string | undefined): string | undefined {
-  if (!value || value.trim() === '') {
-    return undefined;
-  }
-  
-  try {
-    // Check if value looks like encrypted data
-    if (!isEncrypted(value)) {
-      // Might be plaintext (legacy), return as-is
-      return value;
-    }
-    return decryptFromStripe(value);
-  } catch (error: any) {
-    console.warn(`  ⚠️  Failed to decrypt value: ${error.message}`);
-    return undefined;
-  }
 }
 
 /**
@@ -203,13 +182,10 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
       const customerId = customer.id;
       const metadata = customer.metadata || {};
 
-      // Decrypt customer credentials (gmail_email is stored unencrypted)
-      const encryptedRefreshToken = metadata.gmail_refresh_token;
-      const encryptedSheetId = metadata.google_sheet_id;
-
-      const refreshToken = safeDecrypt(encryptedRefreshToken);
+      // Only gmail_refresh_token is encrypted; gmail_email and google_sheet_id are plaintext
+      const refreshToken = safeDecrypt(metadata.gmail_refresh_token);
       const customerEmail = metadata.gmail_email;
-      const sheetId = safeDecrypt(encryptedSheetId);
+      const sheetId = metadata.google_sheet_id?.trim() || undefined;
 
       // Skip if missing required fields
       if (!refreshToken) {
@@ -253,6 +229,9 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
         const googleSheetsUrl = sheetId
           ? `https://docs.google.com/spreadsheets/d/${sheetId}/edit`
           : undefined;
+        if (!sheetId) {
+          console.log(`   ⚠️  No sheet ID in metadata (google_sheet_id); AI rules will be empty`);
+        }
 
         // Create optimized processing session for this customer
         // Session initializes Gmail/Gemini once and caches rules + domain lookups

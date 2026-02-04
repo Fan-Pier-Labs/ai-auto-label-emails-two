@@ -56,6 +56,13 @@ function getClient(): OAuth2Client {
   return oauth2Client;
 }
 
+/**
+ * Get Gmail API instance (must call initializeGmail first). For use in scripts.
+ */
+export function getGmailApi(): ReturnType<typeof google.gmail> {
+  return google.gmail({ version: 'v1', auth: getClient() });
+}
+
 function isRetryableGmailError(error: unknown): boolean {
   const msg = error && (error as { message?: string }).message;
   return typeof msg !== 'string' || !msg.includes('invalid_grant');
@@ -73,12 +80,14 @@ async function queryEmails(
   gmail: ReturnType<typeof google.gmail>,
   query: string,
   maxResults: number,
-  quiet: boolean
+  quiet: boolean,
+  includeSpamTrash?: boolean
 ): Promise<string[]> {
   const response = await gmail.users.messages.list({
     userId: 'me',
     q: query,
     maxResults,
+    ...(includeSpamTrash === true && { includeSpamTrash: true }),
   });
   const messageIds = response.data.messages?.map(m => m.id!) || [];
   if (!quiet) {
@@ -88,14 +97,20 @@ async function queryEmails(
 }
 
 /**
- * Search for emails matching a query
+ * Search for emails matching a query.
+ * When includeSpamTrash is true, results include messages in SPAM and TRASH (Gmail API default is to exclude them).
  */
-export async function searchEmails(query: string, maxResults: number = 50, quiet: boolean = false): Promise<string[]> {
+export async function searchEmails(
+  query: string,
+  maxResults: number = 50,
+  quiet: boolean = false,
+  includeSpamTrash?: boolean
+): Promise<string[]> {
   const client = getClient();
   const gmail = google.gmail({ version: 'v1', auth: client });
   try {
     return await withRetry(
-      () => queryEmails(gmail, query, maxResults, quiet),
+      () => queryEmails(gmail, query, maxResults, quiet, includeSpamTrash),
       { maxAttempts: 3, initialDelayMs: 1000, maxDelayMs: 10000, isRetryable: isRetryableGmailError }
     );
   } catch (error: unknown) {
@@ -244,6 +259,143 @@ export async function getEmail(messageId: string): Promise<Email> {
     () => getEmailCore(gmail, messageId),
     { maxAttempts: 3, initialDelayMs: 1000, maxDelayMs: 10000, isRetryable: isRetryableGmailError }
   );
+}
+
+export interface EmailWithHeaders {
+  email: Email;
+  headers: Array<{ name: string; value: string }>;
+}
+
+async function getEmailWithHeadersCore(
+  gmail: ReturnType<typeof google.gmail>,
+  messageId: string
+): Promise<EmailWithHeaders> {
+  const response = await gmail.users.messages.get({
+    userId: 'me',
+    id: messageId,
+    format: 'full',
+  });
+  const message = response.data;
+  const rawHeaders = message.payload?.headers || [];
+  const headers = rawHeaders.map(h => ({
+    name: h.name || '',
+    value: h.value || '',
+  }));
+  const getHeader = (name: string): string => {
+    const header = rawHeaders.find(h => h.name?.toLowerCase() === name.toLowerCase());
+    return header?.value || '';
+  };
+  const fromHeader = getHeader('From');
+  const fromMatch = fromHeader.match(/<(.+?)>/) || fromHeader.match(/([^\s]+@[^\s]+)/);
+  const fromAddress = fromMatch ? fromMatch[1] : fromHeader;
+  const fromDomain = fromAddress.split('@')[1] || '';
+  const toHeader = getHeader('To');
+  const toAddresses = toHeader.match(/[^\s,<]+@[^\s,>]+/g) || [];
+  const toDomains = [...new Set(toAddresses.map(addr => addr.split('@')[1]))];
+  let body = '';
+  const getBody = (part: any): void => {
+    if (part.body?.data) {
+      body += Buffer.from(part.body.data, 'base64').toString('utf-8');
+    }
+    if (part.parts) {
+      part.parts.forEach(getBody);
+    }
+  };
+  if (message.payload) {
+    getBody(message.payload);
+  }
+  const email: Email = {
+    id: message.id!,
+    threadId: message.threadId!,
+    from: fromHeader,
+    fromAddress,
+    fromDomain,
+    to: toAddresses,
+    toAddresses,
+    toDomains,
+    subject: getHeader('Subject'),
+    body: body || '',
+    snippet: message.snippet || '',
+    receivedDate: new Date(parseInt(message.internalDate || '0')),
+    labels: message.labelIds || [],
+  };
+  return { email, headers };
+}
+
+/**
+ * Get full email details plus raw headers (e.g. Received, Reply-To)
+ */
+export async function getEmailWithHeaders(messageId: string): Promise<EmailWithHeaders> {
+  const client = getClient();
+  const gmail = google.gmail({ version: 'v1', auth: client });
+  return withRetry(
+    () => getEmailWithHeadersCore(gmail, messageId),
+    { maxAttempts: 3, initialDelayMs: 1000, maxDelayMs: 10000, isRetryable: isRetryableGmailError }
+  );
+}
+
+/**
+ * Get all From addresses that appear in a thread (for "same chain as someone I've emailed")
+ */
+export async function getThreadFromAddresses(threadId: string): Promise<string[]> {
+  const client = getClient();
+  const gmail = google.gmail({ version: 'v1', auth: client });
+  const response = await withRetry(
+    () =>
+      gmail.users.threads.get({
+        userId: 'me',
+        id: threadId,
+        format: 'full',
+      }),
+    { maxAttempts: 3, initialDelayMs: 1000, maxDelayMs: 10000, isRetryable: isRetryableGmailError }
+  );
+  const messages = response.data.messages || [];
+  const addresses = new Set<string>();
+  for (const msg of messages) {
+    const headers = msg.payload?.headers || [];
+    const fromHeader = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
+    const match = fromHeader.match(/<(.+?)>/) || fromHeader.match(/([^\s]+@[^\s]+)/);
+    if (match) {
+      addresses.add(match[1].trim().toLowerCase());
+    }
+  }
+  return [...addresses];
+}
+
+/** Gmail filter criteria (subset we use for matching). */
+export interface GmailFilterCriteria {
+  from?: string | null;
+  to?: string | null;
+  subject?: string | null;
+  query?: string | null;
+  hasAttachment?: boolean | null;
+}
+
+/** Gmail filter action (subset we use). */
+export interface GmailFilterAction {
+  addLabelIds?: string[] | null;
+  removeLabelIds?: string[] | null;
+}
+
+/** Single Gmail filter (from users.settings.filters.list). */
+export interface GmailFilter {
+  id?: string | null;
+  criteria?: GmailFilterCriteria | null;
+  action?: GmailFilterAction | null;
+}
+
+/**
+ * List all Gmail filters for the authenticated user.
+ * Requires scope that includes filters (e.g. gmail.settings.basic or gmail.modify).
+ */
+export async function listGmailFilters(): Promise<GmailFilter[]> {
+  const client = getClient();
+  const gmail = google.gmail({ version: 'v1', auth: client });
+  const response = await withRetry(
+    () => gmail.users.settings.filters.list({ userId: 'me' }),
+    { maxAttempts: 3, initialDelayMs: 1000, maxDelayMs: 10000, isRetryable: isRetryableGmailError }
+  );
+  return response.data.filter ?? [];
 }
 
 async function applyLabelsCore(

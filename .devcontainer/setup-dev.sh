@@ -107,6 +107,13 @@ if command -v curl &> /dev/null; then
     fi
 fi
 
+# Install Node.js (includes npm and npx)
+if command -v curl &> /dev/null; then
+    echo "Installing Node.js (npm/npx)..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs || echo "Node.js installation failed, continuing..."
+fi
+
 # Install Python dependencies
 pip3 install --no-cache-dir pyyaml boto3 --break-system-packages
 

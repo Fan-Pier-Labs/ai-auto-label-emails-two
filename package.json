@@ -23,7 +23,7 @@
     "deploy": "next build && python3 ./node_modules/deploy/main.py --config deploy.yaml"
   },
   "dependencies": {
-    "@aws-sdk/client-secrets-manager": "^3.978.0",
+    "@aws-sdk/client-secrets-manager": "^3.982.0",
     "@google/generative-ai": "^0.21.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
@@ -83,7 +83,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/node": "^22.19.7",
+    "@types/node": "^22.19.8",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
     "baseline-browser-mapping": "^2.9.19",

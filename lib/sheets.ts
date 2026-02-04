@@ -59,7 +59,11 @@ async function fetchSheetRules(csvUrl: string): Promise<LabelRule[]> {
       }
     }
   }
-  console.log(`[Sheets] Loaded ${rules.length} rules from spreadsheet`);
+  if (rules.length === 0) {
+    console.warn('[Sheets] Loaded 0 AI rules from spreadsheet (check sheet is shared via "Anyone with the link" and has Label + Prompt in columns A-B)');
+  } else {
+    console.log(`[Sheets] Loaded ${rules.length} rules from spreadsheet`);
+  }
   return rules;
 }
 

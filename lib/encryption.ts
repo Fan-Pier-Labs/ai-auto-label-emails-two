@@ -87,3 +87,23 @@ export function isEncrypted(value: string): boolean {
     return false;
   }
 }
+
+/**
+ * Safely decrypts a metadata value, returning undefined if empty or invalid.
+ * Plaintext (legacy) values are returned as-is.
+ */
+export function safeDecrypt(value: string | undefined): string | undefined {
+  if (!value || value.trim() === '') {
+    return undefined;
+  }
+  try {
+    if (!isEncrypted(value)) {
+      return value;
+    }
+    return decryptFromStripe(value);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`  ⚠️  Failed to decrypt value: ${message}`);
+    return undefined;
+  }
+}

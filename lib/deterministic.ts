@@ -111,7 +111,7 @@ export function categorizeSMTPProvider(mxRecords: string[] | null): 'gmail' | 'm
  * Check if a domain is accessible via HTTP/HTTPS
  * Returns { isDown: boolean, redirectsToDifferentDomain: boolean | null, redirectTargetDomain: string | null }
  */
-async function checkDomainStatus(domain: string): Promise<{
+export async function checkDomainStatus(domain: string): Promise<{
   isDown: boolean;
   redirectsToDifferentDomain: boolean | null;
   redirectTargetDomain: string | null;

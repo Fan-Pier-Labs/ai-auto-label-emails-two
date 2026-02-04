@@ -4,7 +4,7 @@ import { google } from 'googleapis';
 import { config } from 'dotenv';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { decryptFromStripe, encryptForStripe, isEncrypted } from '../lib/encryption';
+import { encryptForStripe, safeDecrypt } from '../lib/encryption';
 
 // Load .env file if it exists
 config();
@@ -78,26 +78,6 @@ function getOAuthCredentials(): { clientId: string; clientSecret: string } {
     '1. Create google_creds.json in the project root (download from https://console.cloud.google.com/apis/credentials), or\n' +
     '2. Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET environment variables'
   );
-}
-
-/**
- * Safely decrypts a metadata value, returning undefined if empty or invalid
- */
-function safeDecrypt(value: string | undefined): string | undefined {
-  if (!value || value.trim() === '') {
-    return undefined;
-  }
-
-  try {
-    if (!isEncrypted(value)) {
-      // Might be plaintext (legacy), return as-is
-      return value;
-    }
-    return decryptFromStripe(value);
-  } catch (error: any) {
-    console.warn(`  ⚠️  Failed to decrypt value: ${error.message}`);
-    return undefined;
-  }
 }
 
 interface RefreshOptions {

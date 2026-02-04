@@ -1,25 +1,41 @@
 #!/usr/bin/env bun
 import next from 'next';
 import { createServer } from 'http';
-import { loadSecretsFromAWS } from '../lib/secrets';
-import { processAllCustomers } from './process-all-customers';
+import { loadSecretsFromAWS, getGeminiApiKey } from '../lib/secrets';
+import { main, getSecretFromAWS } from './run-ryan-rules';
 
-const ONE_HOUR_MS = 60 * 60 * 1000;
+const RYAN_RULES_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const RYAN_GMAIL_SECRET_ARN =
+  'arn:aws:secretsmanager:us-east-2:555985150976:secret:ryan-gmail-refresh-token-qv3WLe';
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
+/** Params for the Ryan rules processor (shared across runs; processedIds is mutated). */
+type RyanRulesParams = {
+  emailAddress: string;
+  gmailRefreshToken: string;
+  geminiApiKey: string;
+  dryRun: boolean;
+  query: string;
+  maxEmails: number;
+  lookbackHours: number;
+  includeSpamTrash: boolean;
+  processedIds: Set<string>;
+};
+
 /**
- * Starts the hourly customer processor loop
+ * Runs one Ryan rules pass, then schedules the next run after the interval.
+ * Default: all mail (inbox + spam). Processed IDs are kept in memory so we never process the same email twice.
  */
-function startProcessorLoop(): void {
-  // Run immediately on startup
-  console.log(`[${new Date().toISOString()}] Running initial customer processing...`);
-  processAllCustomers().catch(console.error);
-  
-  // Then run every hour
-  setInterval(() => {
-    console.log(`[${new Date().toISOString()}] Running scheduled customer processing...`);
-    processAllCustomers().catch(console.error);
-  }, ONE_HOUR_MS);
+function startRyanRulesLoop(params: RyanRulesParams): void {
+  const run = (): void => {
+    console.log(`[${new Date().toISOString()}] Running Ryan rules (${params.processedIds.size} IDs in cache)...`);
+    main(params)
+      .catch(console.error)
+      .finally(() => {
+        setTimeout(run, RYAN_RULES_INTERVAL_MS);
+      });
+  };
+  run();
 }
 
 /**
@@ -42,13 +58,36 @@ async function startNextServer(): Promise<void> {
 }
 
 // Main entry point
-async function main(): Promise<void> {
+async function bootstrap(): Promise<void> {
   // Load secrets from AWS Secrets Manager before starting
   console.log(`[${new Date().toISOString()}] Loading secrets from AWS...`);
   await loadSecretsFromAWS();
-  
-  startProcessorLoop();
+
+  // Build Ryan rules params (all mail including spam; processedIds shared across runs)
+  console.log(`[${new Date().toISOString()}] Fetching Gmail refresh token for Ryan rules...`);
+  const gmailRefreshToken = await getSecretFromAWS(RYAN_GMAIL_SECRET_ARN);
+  if (!gmailRefreshToken) {
+    throw new Error('Gmail refresh token is empty. Check AWS Secrets Manager.');
+  }
+  const geminiApiKey = await getGeminiApiKey();
+  const dryRun = process.env.DRY_RUN !== undefined ? process.env.DRY_RUN === 'true' : true;
+  const maxEmails = parseInt(process.env.MAX_EMAILS ?? '50', 10);
+  const lookbackHours = parseInt(process.env.LOOKBACK_HOURS ?? '168', 10);
+
+  const ryanParams: RyanRulesParams = {
+    emailAddress: 'ryan@fanpierlabs.com',
+    gmailRefreshToken,
+    geminiApiKey,
+    dryRun,
+    query: '',
+    maxEmails,
+    lookbackHours,
+    includeSpamTrash: true, // default: all mail including spam
+    processedIds: new Set<string>(),
+  };
+
+  startRyanRulesLoop(ryanParams);
   await startNextServer();
 }
 
-main().catch(console.error);
+bootstrap().catch(console.error);

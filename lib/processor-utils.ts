@@ -125,6 +125,8 @@ export class ProcessingSession {
     // Load rules from Google Sheets (once)
     if (this.config.googleSheetsUrl) {
       await this.loadRules();
+    } else {
+      console.log('[Session] No Google Sheets URL; AI rules will be empty (check customer metadata google_sheet_id)');
     }
   }
 
