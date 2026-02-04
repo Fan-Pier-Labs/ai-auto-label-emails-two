@@ -171,6 +171,17 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
       expand: ['data.customer'],
     });
 
+    if (subscriptionCount === 0 && subscriptions.data.length === 0) {
+      console.log(
+        '\n⚠️  No active subscriptions found in Stripe.\n' +
+          '   Customers are loaded from Stripe subscriptions (status=active).\n' +
+          '   • Check your Stripe Dashboard → Customers / Subscriptions.\n' +
+          '   • Ensure STRIPE_SECRET_KEY matches the account (test vs live key).\n'
+      );
+    } else if (subscriptions.data.length > 0 && subscriptionCount === 0) {
+      console.log(`   Found ${subscriptions.data.length} active subscription(s).`);
+    }
+
     for (const subscription of subscriptions.data) {
       if (subscriptionCount >= limit) break;
       subscriptionCount++;
@@ -192,13 +203,12 @@ async function processAllCustomers(options: ProcessingOptions = {}): Promise<voi
       const customerId = customer.id;
       const metadata = customer.metadata || {};
 
-      // Decrypt customer credentials
+      // Decrypt customer credentials (gmail_email is stored unencrypted)
       const encryptedRefreshToken = metadata.gmail_refresh_token;
-      const encryptedEmail = metadata.gmail_email;
       const encryptedSheetId = metadata.google_sheet_id;
 
       const refreshToken = safeDecrypt(encryptedRefreshToken);
-      const customerEmail = safeDecrypt(encryptedEmail);
+      const customerEmail = metadata.gmail_email;
       const sheetId = safeDecrypt(encryptedSheetId);
 
       // Skip if missing required fields

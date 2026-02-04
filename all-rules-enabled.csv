@@ -1,0 +1,22 @@
+Label Name,Prompt,C,D,E,Enabled?,label name,AI Prompt
+Has-Unsubscribe,"Apply this label if the email contains an unsubscribe link, unsubscribe button, or opt-out mechanism anywhere in the body or footer.",,,,,
+job applicant,"Apply this label if the email is from someone applying for a job, sending a resume, or inquiring about employment opportunities.",,,,,
+terms update,"Apply this label if the email is about updated terms of service, privacy policy changes, or legal agreement modifications.",,,,,
+spammy,"Apply this label if the email appears to be spam, unsolicited marketing, or suspicious in nature.",,,,,
+,,,,yes,first-domain,"Apply this label when first-domain check passed - this is the first time receiving an email from this sender's domain."
+,,,,yes,first-address,"Apply this label when first-address check passed - this is the first time receiving an email from this exact sender address."
+,,,,yes,no-email-domain,"Apply this label when no-email-domain check passed - you have previously sent emails to this domain."
+,,,,yes,no-email-address,"Apply this label when no-email-address check passed - you have previously sent emails to this exact address."
+,,,,yes,domain-down,"Apply this label when domain-down check passed - the sender's domain is not accessible via HTTP/HTTPS."
+,,,,yes,domain-redirects,"Apply this label when domain-redirects check passed - the sender's domain redirects to a different domain."
+,,,,yes,new-domain,"Apply this label when new-domain check passed - the sender's domain was registered less than 3 months ago."
+,,,,yes,domain-resolves-known-provider,"Apply this label when domain-resolves-known-provider check passed - the domain uses a known email provider like Gmail or Outlook."
+,,,,yes,smtp-gmail,"Apply this label when smtp-gmail check passed - the sender's domain uses Gmail SMTP servers."
+,,,,yes,smtp-msft,"Apply this label when smtp-msft check passed - the sender's domain uses Microsoft/Outlook SMTP servers."
+,,,,yes,smtp-automation,"Apply this label when smtp-automation check passed - the sender uses an automation/marketing email platform like Mailgun, SendGrid, Mailchimp, etc."
+,,,,yes,smtp-work-email,"Apply this label when smtp-work-email check passed - the sender uses a business email provider like Google Workspace or Microsoft 365."
+,,,,yes,smtp-other,"Apply this label when smtp-other check passed - the sender uses an identifiable SMTP provider that doesn't fit other categories."
+,,,,yes,no-spf,"Apply this label when no-spf check passed - the sender's domain has no SPF record configured (potential security issue)."
+,,,,yes,no-dmarc,"Apply this label when no-dmarc check passed - the sender's domain has no DMARC record configured (potential security issue)."
+,,,,yes,has-dkim,"Apply this label when has-dkim check passed - the sender's domain has DKIM configured (good security practice)."
+,,,,yes,no-txt,"Apply this label when no-txt check passed - the sender's domain has no TXT DNS records at all (unusual)."

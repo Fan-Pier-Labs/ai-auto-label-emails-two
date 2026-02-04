@@ -53,9 +53,17 @@ export async function GET(request: NextRequest) {
     const { clientId, clientSecret } = getOAuthCredentials();
 
     // Get the base URL for the callback
-    const protocol = request.headers.get('x-forwarded-proto') || 'http';
-    const host = request.headers.get('host') || 'localhost:3000';
-    const redirectUri = `${protocol}://${host}/api/auth/gmail/callback`;
+    // Use NEXT_APP_URL env var (must be set in production with https://)
+    // Fallback to dynamic construction for local development
+    let redirectUri: string;
+    if (process.env.NEXT_APP_URL) {
+      const base = process.env.NEXT_APP_URL.replace(/\/$/, '');
+      redirectUri = `${base}/api/auth/gmail/callback`;
+      console.log(`[OAuth] Using NEXT_APP_URL: ${redirectUri}`);
+    } else {
+      redirectUri = `${request.nextUrl.origin}/api/auth/gmail/callback`;
+      console.log(`[OAuth] NEXT_APP_URL not set, using request origin: ${redirectUri}`);
+    }
 
     // Generate state token for CSRF protection
     const state = randomBytes(32).toString('hex');

@@ -16,20 +16,12 @@ task:
   port: 8080
 
 secrets:
-  - arn:aws:secretsmanager:us-east-2:555985150976:secret:GEMINI_API_KEY-Wtqpz8
-  - arn:aws:secretsmanager:us-east-2:555985150976:secret:AI_EMAIL_LABELING_APP_STRIPE_ENCRYPTION_KEY-BeDr4U
   - arn:aws:secretsmanager:us-east-2:555985150976:secret:AI_EMAIL_LABELING_APP-lBzZpo
 
 # Required: ecsTaskExecutionRole needs GetSecretValue so the task can read secrets at runtime.
 custom_iam_policy:
   Version: "2012-10-17"
   Statement:
-    - Effect: Allow
-      Action: secretsmanager:GetSecretValue
-      Resource: arn:aws:secretsmanager:us-east-2:555985150976:secret:GEMINI_API_KEY-Wtqpz8
-    - Effect: Allow
-      Action: secretsmanager:GetSecretValue
-      Resource: arn:aws:secretsmanager:us-east-2:555985150976:secret:AI_EMAIL_LABELING_APP_STRIPE_ENCRYPTION_KEY-BeDr4U
     - Effect: Allow
       Action: secretsmanager:GetSecretValue
       Resource: arn:aws:secretsmanager:us-east-2:555985150976:secret:AI_EMAIL_LABELING_APP-lBzZpo

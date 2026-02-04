@@ -1,20 +1,20 @@
-import { Brain, Tag, Zap } from "lucide-react"
+import { Brain, ShieldCheck, Star, Zap } from "lucide-react"
 
 const features = [
+  {
+    icon: ShieldCheck,
+    title: "You Decide What’s Spam",
+    description: "Take control of your inbox. Define exactly what counts as spam—no more relying on Gmail’s black-box filter. Your rules, your call."
+  },
+  {
+    icon: Star,
+    title: "Never Miss Important Email",
+    description: "Automatically highlight important based solely on rules you define. Never miss an important email again."
+  },
   {
     icon: Brain,
     title: "AI-Powered Rules",
     description: "Create custom prompts that intelligently match email content and automatically apply the right labels."
-  },
-  {
-    icon: Tag,
-    title: "Smart Detection",
-    description: "Automatically identify first-time senders, new domains, and contacts you've never emailed before."
-  },
-  {
-    icon: Zap,
-    title: "Works Automatically",
-    description: "Runs continuously in the background, processing your emails without any manual intervention."
   }
 ]
 

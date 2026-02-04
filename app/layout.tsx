@@ -10,6 +10,14 @@ import "./globals.css"
 export const metadata: Metadata = {
   title: "Auto Label Emails with AI",
   description: "Set up custom Gmail labels that are automatically applied using AI smart rules",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon-light.svg", type: "image/svg+xml", media: "(prefers-color-scheme: light)" },
+      { url: "/icon-dark.svg", type: "image/svg+xml", media: "(prefers-color-scheme: dark)" },
+    ],
+    apple: "/apple-icon.png",
+  },
 }
 
 export default function RootLayout({

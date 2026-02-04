@@ -4,9 +4,9 @@
   "description": "Auto label emails with AI - Next.js app with Gemini AI",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "bun run scripts/dev.ts",
     "build": "next build",
-    "start": "next start",
+    "start": "bun run scripts/start.ts",
     "lint": "next lint",
     "bun:dev": "bun --bun next dev",
     "bun:build": "bun --bun next build",
@@ -20,7 +20,7 @@
     "test": "bun test $(find lib -name '*.test.ts' ! -name '*.network.test.ts')",
     "test:network": "bun test $(find . -name '*.network.test.ts')",
     "test:all": "bun test",
-    "deploy": "./node_modules/.bin/bun run build && python3 ./node_modules/deploy/main.py --config deploy.yaml"
+    "deploy": "next build && python3 ./node_modules/deploy/main.py --config deploy.yaml"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.978.0",
@@ -86,6 +86,7 @@
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
+    "baseline-browser-mapping": "^2.9.19",
     "deploy": "https://github.com/fan-Pier-Labs/deploy",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",

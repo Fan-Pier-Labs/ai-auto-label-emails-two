@@ -1,0 +1,13 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Light mode: dark background, white icon -->
+  <rect fill="#18181b" width="32" height="32" rx="7"/>
+  
+  <!-- Mail envelope -->
+  <g stroke="white" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="6" y="9" width="20" height="15" rx="2"/>
+    <polyline points="6,11 16,18 26,11"/>
+  </g>
+  
+  <!-- Tag indicator -->
+  <circle fill="white" cx="24" cy="21" r="3.5"/>
+</svg>

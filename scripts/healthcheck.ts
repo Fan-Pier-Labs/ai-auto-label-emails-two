@@ -2,7 +2,7 @@
 
 export {};
 
-const port = process.env.PORT || '3000';
+const port = process.env.PORT || '8080';
 try {
   const res = await fetch(`http://localhost:${port}/api/health`);
   process.exit(res.ok ? 0 : 1);

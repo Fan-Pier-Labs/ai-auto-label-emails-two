@@ -174,12 +174,11 @@ async function refreshCustomerTokens(options: RefreshOptions = {}): Promise<void
       const customerId = customer.id;
       const metadata = customer.metadata || {};
 
-      // Decrypt customer credentials
+      // Decrypt customer credentials (gmail_email is stored unencrypted)
       const encryptedRefreshToken = metadata.gmail_refresh_token;
-      const encryptedEmail = metadata.gmail_email;
 
       const refreshToken = safeDecrypt(encryptedRefreshToken);
-      const customerEmail = safeDecrypt(encryptedEmail) || customer.email || 'unknown';
+      const customerEmail = metadata.gmail_email || customer.email || 'unknown';
 
       // Skip if no refresh token
       if (!refreshToken) {
