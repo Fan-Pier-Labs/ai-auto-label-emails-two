@@ -5,11 +5,11 @@
   "private": true,
   "scripts": {
     "dev": "bun run scripts/dev.ts",
-    "build": "next build",
+    "build": "BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next build",
     "start": "bun run scripts/start.ts",
     "lint": "next lint",
     "bun:dev": "bun --bun next dev",
-    "bun:build": "bun --bun next build",
+    "bun:build": "BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true bun --bun next build",
     "bun:start": "bun --bun next start",
     "get-token": "bun run scripts/get-refresh-token.ts",
     "healthcheck": "bun run scripts/healthcheck.ts",
@@ -20,7 +20,7 @@
     "test": "bun test $(find lib -name '*.test.ts' ! -name '*.network.test.ts')",
     "test:network": "bun test $(find . -name '*.network.test.ts')",
     "test:all": "bun test",
-    "deploy": "next build && python3 ./node_modules/deploy/main.py --config deploy.yaml"
+    "deploy": "BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next build && python3 ./node_modules/deploy/main.py --config deploy.yaml"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.982.0",

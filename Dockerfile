@@ -10,8 +10,10 @@ RUN bun install --frozen-lockfile
 # Copy application code
 COPY . .
 
-# Build the application
+# Build the application (suppress baseline-browser-mapping "data over two months old" warning)
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=1
+ENV BROWSERSLIST_IGNORE_OLD_DATA=1
 RUN bun run build
 
 # Expose port and start (must match deploy.yaml task.port for ELB health checks)

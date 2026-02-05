@@ -15,6 +15,10 @@ task:
   ephemeral_storage: 21
   port: 8080
 
+# ECS task env vars (so prod applies labels; unset DRY_RUN defaults to true in code)
+environment:
+  DRY_RUN: "false"
+
 secrets:
   - arn:aws:secretsmanager:us-east-2:066949051862:secret:AI_EMAIL_LABELING_APP-6h2UPx
   - arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq
