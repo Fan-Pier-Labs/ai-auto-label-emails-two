@@ -26,7 +26,6 @@ custom_iam_policy:
     - Effect: Allow
       Action: secretsmanager:GetSecretValue
       Resource: arn:aws:secretsmanager:us-east-2:066949051862:secret:AI_EMAIL_LABELING_APP-6h2UPx
-  Statement:
     - Effect: Allow
       Action: secretsmanager:GetSecretValue
       Resource: arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq
