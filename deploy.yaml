@@ -1,11 +1,11 @@
 platform: "fargate"
 app_name: "ai-email-labels-2"
 aws:
-  profile: "personal"
+  profile: "ryanhughes624"
   region: "us-east-2"
-public:
-  domain: "ai-email-labels.fanpierlabs.com"
-  mode: "production"
+# public:
+#   domain: "ai-email-labels.fanpierlabs.com"
+#   mode: "production"
 
 task:
   cpu: 1024
@@ -16,7 +16,7 @@ task:
   port: 8080
 
 secrets:
-  - arn:aws:secretsmanager:us-east-2:555985150976:secret:AI_EMAIL_LABELING_APP-lBzZpo
+  - arn:aws:secretsmanager:us-east-2:066949051862:secret:AI_EMAIL_LABELING_APP-6h2UPx
 
 # Required: ecsTaskExecutionRole needs GetSecretValue so the task can read secrets at runtime.
 custom_iam_policy:
@@ -24,7 +24,7 @@ custom_iam_policy:
   Statement:
     - Effect: Allow
       Action: secretsmanager:GetSecretValue
-      Resource: arn:aws:secretsmanager:us-east-2:555985150976:secret:AI_EMAIL_LABELING_APP-lBzZpo
+      Resource: arn:aws:secretsmanager:us-east-2:066949051862:secret:AI_EMAIL_LABELING_APP-6h2UPx
 # Change this to true after you set the name of this project.
 allow_create: true
 

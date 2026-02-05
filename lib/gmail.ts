@@ -428,6 +428,45 @@ export async function applyLabels(messageId: string, labelNames: string[]): Prom
   );
 }
 
+/**
+ * Apply label IDs to an email (e.g. from a Gmail filter action).
+ * Use this when you already have label IDs (e.g. IMPORTANT, Label_123).
+ */
+export async function applyLabelIds(
+  messageId: string,
+  addLabelIds: string[],
+  removeLabelIds: string[] = []
+): Promise<void> {
+  if (addLabelIds.length === 0 && removeLabelIds.length === 0) return;
+  const client = getClient();
+  const gmail = google.gmail({ version: 'v1', auth: client });
+  await withRetry(
+    () =>
+      gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: {
+          ...(addLabelIds.length > 0 && { addLabelIds }),
+          ...(removeLabelIds.length > 0 && { removeLabelIds }),
+        },
+      }),
+    { maxAttempts: 3, initialDelayMs: 1000, maxDelayMs: 10000, isRetryable: isRetryableGmailError }
+  );
+  if (addLabelIds.length > 0 || removeLabelIds.length > 0) {
+    console.log(`[Gmail] Applied label IDs to ${messageId}: add=${addLabelIds.join(',')} remove=${removeLabelIds.join(',')}`);
+  }
+}
+
+/**
+ * Check if the user has ever starred any email to or from the given address.
+ */
+export async function hasStarredEmailToOrFrom(address: string): Promise<boolean> {
+  const escaped = address.replace(/"/g, '\\"');
+  const query = `is:starred (from:"${escaped}" OR to:"${escaped}")`;
+  const ids = await searchEmails(query, 1, true);
+  return ids.length > 0;
+}
+
 function normalizeLabel(name: string): string {
   // Gmail treats hyphens and spaces as equivalent for conflict detection
   return name.trim().toLowerCase().replace(/[-\s]+/g, ' ');

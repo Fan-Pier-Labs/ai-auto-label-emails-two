@@ -21,10 +21,12 @@ import {
   searchEmails,
   getEmailWithHeaders,
   applyLabels,
+  applyLabelIds,
   hasSentToAddress,
   hasSentToDomain,
   getThreadFromAddresses,
   listGmailFilters,
+  hasStarredEmailToOrFrom,
 } from '../lib/gmail';
 import type { GmailFilter, GmailFilterCriteria } from '../lib/gmail';
 import { initializeGemini, callGemini } from '../lib/gemini';
@@ -62,6 +64,8 @@ export interface ProcessCaches {
   /** Domain → HTTP status (from fetch redirect: 'manual'). 200 = pass, >= 300 = redirect = fail. */
   domainHttpStatus: Map<string, number | null>;
   filterQueryIds: Map<string, string[]>;
+  /** address → have we starred any email to/from this address */
+  starredToFrom: Map<string, boolean>;
 }
 
 function createProcessCaches(): ProcessCaches {
@@ -75,6 +79,7 @@ function createProcessCaches(): ProcessCaches {
     domainStatus: new Map(),
     domainHttpStatus: new Map(),
     filterQueryIds: new Map(),
+    starredToFrom: new Map(),
   };
 }
 
@@ -88,8 +93,8 @@ interface MainParams {
   lookbackHours: number;
   /** When true, include messages in SPAM and TRASH in search results (default for "all mail"). */
   includeSpamTrash?: boolean;
-  /** Gmail filters that add IMPORTANT (we match email to their criteria). */
-  importantFilters?: GmailFilter[];
+  /** All Gmail filters: if any match, we apply that filter's action and stop. */
+  allFilters?: GmailFilter[];
   /** Optional in-memory caches for this run. */
   caches?: ProcessCaches;
   /** Optional set of already-processed email IDs to skip (mutated: new IDs added after processing). */
@@ -556,7 +561,53 @@ async function processEmailWithRyanRules(
 
   const caches = params.caches;
 
-  // ---- Rule 1: Ever emailed this person or their domain → important, stop ----
+  // ---- Rule 1: Gmail filters first — if any filter matches, apply that filter's action and stop ----
+  const allFilters = params.allFilters ?? [];
+  for (const filter of allFilters) {
+    const matched = await emailMatchesFilterCriteria(
+      email,
+      emailId,
+      filter.criteria ?? undefined,
+      caches
+    );
+    if (matched) {
+      const addIds = filter.action?.addLabelIds?.filter(Boolean) ?? [];
+      const removeIds = filter.action?.removeLabelIds?.filter(Boolean) ?? [];
+      if (addIds.length > 0 || removeIds.length > 0) {
+        if (dryRun) {
+          console.log(`   [Rule 1 Gmail] Matches filter → would apply addLabelIds: [${addIds.join(', ')}], removeLabelIds: [${removeIds.join(', ')}] (stop)`);
+        } else {
+          await applyLabelIds(emailId, addIds, removeIds);
+          console.log(`   [Rule 1 Gmail] Applied filter → addLabelIds: [${addIds.join(', ')}], removeLabelIds: [${removeIds.join(', ')}] (stop)`);
+        }
+      } else {
+        console.log(`   [Rule 1 Gmail] Matches filter (no label action) (stop)`);
+      }
+      return labels;
+    }
+  }
+
+  // ---- Rule 2: Starred any email to or from this address → important, stop ----
+  let hasStarred: boolean;
+  if (caches?.starredToFrom.has(email.fromAddress)) {
+    hasStarred = caches.starredToFrom.get(email.fromAddress)!;
+  } else {
+    hasStarred = await hasStarredEmailToOrFrom(email.fromAddress);
+    caches?.starredToFrom.set(email.fromAddress, hasStarred);
+  }
+  if (hasStarred) {
+    labels.push('ai important');
+    console.log('   [Rule 2] Starred email to/from this address → ai important (stop)');
+    if (dryRun) {
+      console.log(`   [DRY RUN] Would apply labels: ${labels.join(', ')}`);
+    } else {
+      await applyLabels(emailId, labels);
+      console.log(`   ✅ Applied: ${labels.join(', ')}`);
+    }
+    return labels;
+  }
+
+  // ---- Rule 3: Ever emailed this person or their domain → important, stop ----
   let sentToAddress: boolean;
   if (caches?.sentToAddress.has(email.fromAddress)) {
     sentToAddress = caches.sentToAddress.get(email.fromAddress)!;
@@ -573,7 +624,7 @@ async function processEmailWithRyanRules(
   }
   if (sentToAddress || sentToDomain) {
     labels.push('ai important');
-    console.log('   [Rule 1] Ever emailed sender/domain → ai important (stop)');
+    console.log('   [Rule 3] Ever emailed sender/domain → ai important (stop)');
     if (labels.length > 0) {
       if (dryRun) {
         console.log(`   [DRY RUN] Would apply labels: ${labels.join(', ')}`);
@@ -585,7 +636,7 @@ async function processEmailWithRyanRules(
     return labels;
   }
 
-  // ---- Rule 2: Same thread as someone I've emailed → important, stop ----
+  // ---- Rule 4: Same thread as someone I've emailed → important, stop ----
   let threadAddresses: string[];
   if (caches?.threadAddresses.has(email.threadId)) {
     threadAddresses = caches.threadAddresses.get(email.threadId)!;
@@ -609,7 +660,7 @@ async function processEmailWithRyanRules(
   }
   if (threadMatch) {
     labels.push('ai important');
-    console.log('   [Rule 2] Same thread as someone I emailed → ai important (stop)');
+    console.log('   [Rule 4] Same thread as someone I emailed → ai important (stop)');
     if (labels.length > 0) {
       if (dryRun) {
         console.log(`   [DRY RUN] Would apply labels: ${labels.join(', ')}`);
@@ -621,14 +672,14 @@ async function processEmailWithRyanRules(
     return labels;
   }
 
-  // ---- Rule 3: From @docs.google.com → important, stop ----
+  // ---- Rule 5: From @docs.google.com → important, stop ----
   const docsGoogleDomain = 'docs.google.com';
   if (
     email.fromDomain.toLowerCase() === docsGoogleDomain ||
     email.fromDomain.toLowerCase().endsWith('.' + docsGoogleDomain)
   ) {
     labels.push('ai important');
-    console.log('   [Rule 3] From @docs.google.com → ai important (stop)');
+    console.log('   [Rule 5] From @docs.google.com → ai important (stop)');
     if (dryRun) {
       console.log(`   [DRY RUN] Would apply labels: ${labels.join(', ')}`);
     } else {
@@ -638,36 +689,14 @@ async function processEmailWithRyanRules(
     return labels;
   }
 
-  // ---- Rule 3: Matches a Gmail filter that marks as important → important, stop ----
-  const importantFilters = params.importantFilters ?? [];
-  for (const filter of importantFilters) {
-    const matched = await emailMatchesFilterCriteria(
-      email,
-      emailId,
-      filter.criteria ?? undefined,
-      caches
-    );
-    if (matched) {
-      labels.push('ai important');
-      console.log(`   [Rule 3] Matches Gmail "mark important" filter → ai important (stop)`);
-      if (dryRun) {
-        console.log(`   [DRY RUN] Would apply labels: ${labels.join(', ')}`);
-      } else {
-        await applyLabels(emailId, labels);
-        console.log(`   ✅ Applied: ${labels.join(', ')}`);
-      }
-      return labels;
-    }
-  }
-
-  // ---- Rule 4: Job applicant (known job-portal domains, then AI) → label, stop ----
+  // ---- Rule 6: Job applicant (known job-portal domains, then AI) → label, stop ----
   const jobPortalFromDomains = ['symplicity.com', 'csm.symplicity.com'];
   const fromDomainLower = email.fromDomain.toLowerCase();
   const isKnownJobPortal =
     jobPortalFromDomains.some(d => fromDomainLower === d || fromDomainLower.endsWith('.' + d));
   if (isKnownJobPortal) {
     labels.push('ai job applicant');
-    console.log(`   [Rule 4] From job portal (${email.fromDomain}) → ai job applicant (stop)`);
+    console.log(`   [Rule 6] From job portal (${email.fromDomain}) → ai job applicant (stop)`);
     if (dryRun) {
       console.log(`   [DRY RUN] Would apply labels: ${labels.join(', ')}`);
     } else {
@@ -682,7 +711,7 @@ async function processEmailWithRyanRules(
   const jobResult = await runGeminiRule(email, 'ai job applicant', jobPrompt);
   if (jobResult.match) {
     labels.push('ai job applicant');
-    console.log(`   [Rule 4] Job applicant → ai job applicant (stop): ${jobResult.reason}`);
+    console.log(`   [Rule 6] Job applicant → ai job applicant (stop): ${jobResult.reason}`);
     if (labels.length > 0) {
       if (dryRun) {
         console.log(`   [DRY RUN] Would apply labels: ${labels.join(', ')}`);
@@ -853,17 +882,13 @@ async function main(params: MainParams): Promise<void> {
   });
   await initializeGemini(params.geminiApiKey);
 
-  // Fetch Gmail filters that "mark as important" so we can match and apply ai important
-  let importantFilters: GmailFilter[] = [];
+  // Fetch all Gmail filters — Rule 1 applies matching filter actions and stops
+  let allFilters: GmailFilter[] = [];
   try {
-    const allFilters = await listGmailFilters();
-    importantFilters = allFilters.filter(
-      f => f.action?.addLabelIds?.includes('IMPORTANT') ?? false
-    );
-    if (importantFilters.length > 0) {
-      console.log(`📌 Loaded ${importantFilters.length} Gmail filter(s) that mark as important\n`);
-      // Print first 5 so you can verify we loaded them correctly
-      const toShow = importantFilters.slice(0, 5);
+    allFilters = await listGmailFilters();
+    if (allFilters.length > 0) {
+      console.log(`📌 Loaded ${allFilters.length} Gmail filter(s) (Rule 1: match → apply filter action, stop)\n`);
+      const toShow = allFilters.slice(0, 5);
       toShow.forEach((f, i) => {
         const c = f.criteria ?? {};
         const parts = [
@@ -872,10 +897,11 @@ async function main(params: MainParams): Promise<void> {
           c.subject && `subject: ${c.subject}`,
           c.query && `query: ${c.query}`,
         ].filter(Boolean);
-        console.log(`   Filter ${i + 1}: ${parts.length ? parts.join(' | ') : '(no criteria)'}`);
+        const actions = (f.action?.addLabelIds ?? []).concat(f.action?.removeLabelIds ?? []);
+        console.log(`   Filter ${i + 1}: ${parts.length ? parts.join(' | ') : '(no criteria)'} → [${actions.join(', ')}]`);
       });
-      if (importantFilters.length > 5) {
-        console.log(`   ... and ${importantFilters.length - 5} more\n`);
+      if (allFilters.length > 5) {
+        console.log(`   ... and ${allFilters.length - 5} more\n`);
       } else {
         console.log('');
       }
@@ -885,7 +911,7 @@ async function main(params: MainParams): Promise<void> {
   }
 
   const caches = createProcessCaches();
-  const paramsWithFilters: MainParams = { ...params, importantFilters, caches };
+  const paramsWithFilters: MainParams = { ...params, allFilters, caches };
 
   const emailIds = await searchEmails(query, maxEmails, false, params.includeSpamTrash);
   const toProcess = params.processedIds
