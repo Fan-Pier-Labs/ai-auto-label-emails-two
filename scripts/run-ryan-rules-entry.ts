@@ -12,6 +12,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { main, getSecretFromAWS } from './run-ryan-rules';
 import { getGeminiApiKey } from '../lib/secrets';
+import { GMAIL_REFRESH_TOKEN_SECRET_ARN } from '../lib/const';
 
 const INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -22,10 +23,8 @@ async function sleep(ms: number): Promise<void> {
 async function runLoop(): Promise<void> {
   config();
 
-  const secretArn =
-    'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
   console.log('🔐 Fetching Gmail refresh token from AWS Secrets Manager...');
-  const gmailRefreshToken = await getSecretFromAWS(secretArn);
+  const gmailRefreshToken = await getSecretFromAWS(GMAIL_REFRESH_TOKEN_SECRET_ARN);
   if (!gmailRefreshToken) {
     throw new Error('Gmail refresh token is empty. Check AWS Secrets Manager.');
   }

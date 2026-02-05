@@ -2,11 +2,10 @@
 import next from 'next';
 import { createServer } from 'http';
 import { loadSecretsFromAWS, getGeminiApiKey } from '../lib/secrets';
+import { GMAIL_REFRESH_TOKEN_SECRET_ARN } from '../lib/const';
 import { main, getSecretFromAWS } from './run-ryan-rules';
 
 const RYAN_RULES_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
-const RYAN_GMAIL_SECRET_ARN =
-  'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
 /** Params for the Ryan rules processor (shared across runs; processedIds is mutated). */
@@ -65,7 +64,7 @@ async function bootstrap(): Promise<void> {
 
   // Build Ryan rules params (all mail including spam; processedIds shared across runs)
   console.log(`[${new Date().toISOString()}] Fetching Gmail refresh token for Ryan rules...`);
-  const gmailRefreshToken = await getSecretFromAWS(RYAN_GMAIL_SECRET_ARN);
+  const gmailRefreshToken = await getSecretFromAWS(GMAIL_REFRESH_TOKEN_SECRET_ARN);
   if (!gmailRefreshToken) {
     throw new Error('Gmail refresh token is empty. Check AWS Secrets Manager.');
   }

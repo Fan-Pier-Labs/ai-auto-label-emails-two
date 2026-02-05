@@ -6,6 +6,7 @@ import http from 'http';
 import { parse as parseUrl } from 'url';
 import { SecretsManagerClient, UpdateSecretCommand } from '@aws-sdk/client-secrets-manager';
 import net from 'net';
+import { GMAIL_REFRESH_TOKEN_SECRET_ARN } from '../lib/const';
 
 interface GoogleCreds {
   web?: {
@@ -21,7 +22,6 @@ interface GoogleCreds {
 const SCOPES = ['https://www.googleapis.com/auth/gmail.modify'];
 const START_PORT = 8080;
 const MAX_PORT_ATTEMPTS = 100; // Try up to 100 ports (8080-8179)
-const SECRET_ARN = 'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
 
 /**
  * Check if a port is available
@@ -57,7 +57,7 @@ async function updateAWSSecret(refreshToken: string): Promise<void> {
     console.log('🔄 Updating AWS Secrets Manager...');
     const client = new SecretsManagerClient({ region: 'us-east-2' });
     const command = new UpdateSecretCommand({
-      SecretId: SECRET_ARN,
+      SecretId: GMAIL_REFRESH_TOKEN_SECRET_ARN,
       SecretString: refreshToken,
     });
     await client.send(command);

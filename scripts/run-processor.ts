@@ -8,6 +8,7 @@ import { join } from 'path';
 import { config } from 'dotenv';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { getGeminiApiKey } from '../lib/secrets';
+import { GMAIL_REFRESH_TOKEN_SECRET_ARN } from '../lib/const';
 
 interface GoogleCreds {
   web?: {
@@ -192,9 +193,8 @@ async function test(): Promise<void> {
       
 
     // Get required parameters - fetch refresh token from AWS Secrets Manager
-    const secretArn = 'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
     console.log('🔐 Fetching Gmail refresh token from AWS Secrets Manager...');
-    const gmailRefreshToken = await getSecretFromAWS(secretArn);
+    const gmailRefreshToken = await getSecretFromAWS(GMAIL_REFRESH_TOKEN_SECRET_ARN);
     
     if (!gmailRefreshToken) {
       throw new Error(
