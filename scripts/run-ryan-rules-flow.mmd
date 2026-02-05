@@ -1,0 +1,28 @@
+flowchart TD
+    Start([Fetch email + headers]) --> R1{Rule 1: Matches<br/>Gmail filter?}
+    R1 -->|Yes| L1[Apply filter action · STOP]
+    R1 -->|No| R2{Rule 2: Starred email<br/>to/from this address?}
+    R2 -->|Yes| L2[Add: ai important · STOP]
+    R2 -->|No| R3{Rule 3: Ever emailed<br/>sender or domain?}
+    R3 -->|Yes| L3[Add: ai important · STOP]
+    R3 -->|No| R4{Rule 4: Same thread as<br/>someone I emailed?}
+    R4 -->|Yes| L4[Add: ai important · STOP]
+    R4 -->|No| R5{Rule 5: From<br/>@docs.google.com?}
+    R5 -->|Yes| L5[Add: ai important · STOP]
+    R5 -->|No| R6a{Rule 6: From known<br/>job portal?}
+    R6a -->|Yes| L6a[Add: ai job applicant · STOP]
+    R6a -->|No| R6b{Rule 6: Gemini<br/>job applicant?}
+    R6b -->|Yes| L6b[Add: ai job applicant · STOP]
+    R6b -->|No| Infra[Detect sender infra:<br/>client IP WHOIS → MX → From domain → Received]
+    Infra --> InfraType{Sender infra?}
+    InfraType -->|gmail_msft| Gmail[Run 4 checks:<br/>domain age, up/HTTPS, reply-to, redirect]
+    Gmail --> G1{1 fail? → ai might be spam<br/>2+ fail? → ai not important + ai thinks spam}
+    G1 --> Event
+    InfraType -->|aws_ses_sendgrid| SES{Gemini: cold email<br/>targeted at Ryan?}
+    SES -->|Yes| SESL[Add: ai detected cold email · STOP]
+    SES -->|No| Event
+    InfraType -->|other| Other[Add: unknown sender mail system]
+    Other --> Event
+    Event[Event rules: Gemini for<br/>online event, poker night, NYC event, brand event]
+    Event --> Imp[Event importance:<br/>online-only → ai not important<br/>NYC/poker/brand → ai important]
+    Imp --> Apply[Apply all labels · Return]

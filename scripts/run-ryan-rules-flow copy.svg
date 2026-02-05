@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 1200" font-family="system-ui, sans-serif" font-size="11">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#374151"/>
+    </marker>
+    <style>
+      .start-end { fill: #dbeafe; stroke: #2563eb; }
+      .decision { fill: #fef3c7; stroke: #d97706; }
+      .action { fill: #d1fae5; stroke: #059669; }
+      .stop { fill: #fecaca; stroke: #dc2626; }
+      .infra { fill: #e0e7ff; stroke: #4f46e5; }
+      .event { fill: #fce7f3; stroke: #be185d; }
+      text { fill: #1f2937; }
+    </style>
+  </defs>
+  <!-- Start -->
+  <ellipse class="start-end" cx="260" cy="24" rx="100" ry="18"/>
+  <text x="260" y="28" text-anchor="middle">Fetch email + headers</text>
+
+  <!-- Rule 1 -->
+  <path class="decision" d="M260 54 L340 84 L260 114 L180 84 Z"/>
+  <text x="260" y="78" text-anchor="middle">Rule 1: Matches</text>
+  <text x="260" y="90" text-anchor="middle">Gmail filter?</text>
+  <path d="M260 42 L260 54" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <rect class="stop" x="340" y="88" width="120" height="36" rx="4"/>
+  <text x="400" y="105" text-anchor="middle">Apply filter &#183; STOP</text>
+  <path d="M340 84 L340 88" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="365" y="92" text-anchor="middle">Yes</text>
+  <path d="M260 114 L260 132" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="240" y="125" text-anchor="middle">No</text>
+
+  <!-- Rule 2 -->
+  <path class="decision" d="M260 144 L340 174 L260 204 L180 174 Z"/>
+  <text x="260" y="168" text-anchor="middle">Rule 2: Starred</text>
+  <text x="260" y="180" text-anchor="middle">to/from address?</text>
+  <rect class="stop" x="340" y="178" width="120" height="36" rx="4"/>
+  <text x="400" y="193" text-anchor="middle">ai important &#183; STOP</text>
+  <path d="M260 204 L260 222" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <line x1="340" y1="196" x2="400" y2="196" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="365" y="192" text-anchor="middle">Yes</text>
+
+  <!-- Rule 3 -->
+  <path class="decision" d="M260 234 L340 264 L260 294 L180 264 Z"/>
+  <text x="260" y="258" text-anchor="middle">Rule 3: Ever emailed</text>
+  <text x="260" y="270" text-anchor="middle">sender or domain?</text>
+  <rect class="stop" x="340" y="268" width="120" height="36" rx="4"/>
+  <text x="400" y="283" text-anchor="middle">ai important &#183; STOP</text>
+  <path d="M260 294 L260 312" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <line x1="340" y1="286" x2="400" y2="286" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="365" y="282" text-anchor="middle">Yes</text>
+
+  <!-- Rule 4 -->
+  <path class="decision" d="M260 324 L340 354 L260 384 L180 354 Z"/>
+  <text x="260" y="348" text-anchor="middle">Rule 4: Same thread</text>
+  <text x="260" y="360" text-anchor="middle">as someone I emailed?</text>
+  <rect class="stop" x="340" y="358" width="120" height="36" rx="4"/>
+  <text x="400" y="373" text-anchor="middle">ai important &#183; STOP</text>
+  <path d="M260 384 L260 402" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <line x1="340" y1="376" x2="400" y2="376" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="365" y="372" text-anchor="middle">Yes</text>
+
+  <!-- Rule 5 -->
+  <path class="decision" d="M260 414 L340 444 L260 474 L180 444 Z"/>
+  <text x="260" y="438" text-anchor="middle">Rule 5: From</text>
+  <text x="260" y="450" text-anchor="middle">@docs.google.com?</text>
+  <rect class="stop" x="340" y="448" width="120" height="36" rx="4"/>
+  <text x="400" y="463" text-anchor="middle">ai important &#183; STOP</text>
+  <path d="M260 474 L260 492" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <line x1="340" y1="466" x2="400" y2="466" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="365" y="462" text-anchor="middle">Yes</text>
+
+  <!-- Rule 6a -->
+  <path class="decision" d="M260 504 L340 534 L260 564 L180 534 Z"/>
+  <text x="260" y="528" text-anchor="middle">Rule 6: Known</text>
+  <text x="260" y="540" text-anchor="middle">job portal?</text>
+  <rect class="stop" x="340" y="538" width="120" height="36" rx="4"/>
+  <text x="400" y="553" text-anchor="middle">ai job applicant &#183; STOP</text>
+  <path d="M260 564 L260 582" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <line x1="340" y1="556" x2="400" y2="556" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="365" y="552" text-anchor="middle">Yes</text>
+
+  <!-- Rule 6b -->
+  <path class="decision" d="M260 594 L340 624 L260 654 L180 624 Z"/>
+  <text x="260" y="618" text-anchor="middle">Rule 6: Gemini</text>
+  <text x="260" y="630" text-anchor="middle">job applicant?</text>
+  <rect class="stop" x="340" y="628" width="120" height="36" rx="4"/>
+  <text x="400" y="643" text-anchor="middle">ai job applicant &#183; STOP</text>
+  <path d="M260 654 L260 678" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <line x1="340" y1="646" x2="400" y2="646" stroke="#374151" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="365" y="642" text-anchor="middle">Yes</text>
+
+  <!-- Sender infra -->
+  <rect class="infra" x="140" y="678" width="240" height="44" rx="4"/>
+  <text x="260" y="696" text-anchor="middle">Detect sender infra:</text>
+  <text x="260" y="710" text-anchor="middle">client IP WHOIS &#8594; MX &#8594; From domain &#8594; Received</text>
+  <path d="M260 672 L260 678" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Infra type decision -->
+  <path class="decision" d="M260 738 L340 768 L260 798 L180 768 Z"/>
+  <text x="260" y="762" text-anchor="middle">Sender infra?</text>
+  <path d="M260 722 L260 738" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- gmail_msft branch -->
+  <rect class="action" x="40" y="818" width="160" height="52" rx="4"/>
+  <text x="120" y="836" text-anchor="middle">gmail_msft:</text>
+  <text x="120" y="852" text-anchor="middle">4 checks (domain age,</text>
+  <text x="120" y="864" text-anchor="middle">up/HTTPS, reply-to, redirect)</text>
+  <path d="M180 768 L120 818" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="130" y="798" text-anchor="middle">gmail_msft</text>
+
+  <rect class="action" x="40" y="886" width="160" height="40" rx="4"/>
+  <text x="120" y="906" text-anchor="middle">1 fail &#8594; ai might be spam</text>
+  <text x="120" y="918" text-anchor="middle">2+ fail &#8594; ai not important + ai thinks spam</text>
+  <path d="M120 870 L120 886" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- aws_ses_sendgrid branch -->
+  <path class="decision" d="M340 768 L420 798 L340 828 L260 798 Z"/>
+  <text x="340" y="806" text-anchor="middle">Gemini: cold email</text>
+  <text x="340" y="818" text-anchor="middle">targeted at Ryan?</text>
+  <path d="M340 768 L340 798 L340 798" stroke="#374151" stroke-width="1.5" fill="none"/>
+  <path d="M320 780 L340 798" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="318" y="788" text-anchor="middle">aws_ses</text>
+
+  <rect class="stop" x="420" y="808" width="100" height="44" rx="4"/>
+  <text x="470" y="826" text-anchor="middle">ai detected</text>
+  <text x="470" y="840" text-anchor="middle">cold email &#183; STOP</text>
+  <path d="M420 798 L420 808" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="398" y="822" text-anchor="middle">Yes</text>
+
+  <!-- other branch -->
+  <rect class="action" x="260" y="838" width="140" height="36" rx="4"/>
+  <text x="330" y="858" text-anchor="middle">Add: unknown sender mail system</text>
+  <path d="M260 798 L260 838" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="248" y="822" text-anchor="middle">other</text>
+
+  <!-- Converge to Event -->
+  <rect class="event" x="140" y="948" width="240" height="44" rx="4"/>
+  <text x="260" y="966" text-anchor="middle">Event rules: Gemini for</text>
+  <text x="260" y="980" text-anchor="middle">online event, poker night, NYC event, brand event</text>
+  <path d="M120 926 L120 948 L260 948" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M340 828 L340 880 L260 880 L260 948" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="330" y="858" text-anchor="middle">No</text>
+  <path d="M260 856 L260 880" stroke="#374151" stroke-width="1.5" fill="none"/>
+  <path d="M330 874 L260 880" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Event importance -->
+  <rect class="event" x="140" y="1008" width="240" height="40" rx="4"/>
+  <text x="260" y="1026" text-anchor="middle">Event importance: online-only &#8594; ai not important;</text>
+  <text x="260" y="1040" text-anchor="middle">NYC / poker / brand &#8594; ai important</text>
+  <path d="M260 992 L260 1008" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Apply -->
+  <rect class="action" x="140" y="1064" width="240" height="32" rx="4"/>
+  <text x="260" y="1084" text-anchor="middle">Apply all labels &#183; Return</text>
+  <path d="M260 1048 L260 1064" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <ellipse class="start-end" cx="260" cy="1132" rx="60" ry="16"/>
+  <text x="260" y="1136" text-anchor="middle">End</text>
+  <path d="M260 1096 L260 1116" stroke="#374151" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+</svg>
