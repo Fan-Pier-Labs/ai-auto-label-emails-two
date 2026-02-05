@@ -192,7 +192,7 @@ async function test(): Promise<void> {
       
 
     // Get required parameters - fetch refresh token from AWS Secrets Manager
-    const secretArn = 'arn:aws:secretsmanager:us-east-2:555985150976:secret:ryan-gmail-refresh-token-qv3WLe';
+    const secretArn = 'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
     console.log('🔐 Fetching Gmail refresh token from AWS Secrets Manager...');
     const gmailRefreshToken = await getSecretFromAWS(secretArn);
     

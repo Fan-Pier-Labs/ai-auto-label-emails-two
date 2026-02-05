@@ -6,7 +6,7 @@ import { main, getSecretFromAWS } from './run-ryan-rules';
 
 const RYAN_RULES_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const RYAN_GMAIL_SECRET_ARN =
-  'arn:aws:secretsmanager:us-east-2:555985150976:secret:ryan-gmail-refresh-token-qv3WLe';
+  'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
 /** Params for the Ryan rules processor (shared across runs; processedIds is mutated). */

@@ -961,7 +961,7 @@ async function test(): Promise<void> {
   config();
 
   const secretArn =
-    'arn:aws:secretsmanager:us-east-2:555985150976:secret:ryan-gmail-refresh-token-qv3WLe';
+    'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
   console.log('🔐 Fetching Gmail refresh token from AWS Secrets Manager...');
   const gmailRefreshToken = await getSecretFromAWS(secretArn);
   if (!gmailRefreshToken) {
@@ -1003,7 +1003,7 @@ async function test_get_email_sender(): Promise<void> {
   config();
 
   const secretArn =
-    'arn:aws:secretsmanager:us-east-2:555985150976:secret:ryan-gmail-refresh-token-qv3WLe';
+    'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
   console.log('🔐 Fetching Gmail refresh token from AWS Secrets Manager...');
   const gmailRefreshToken = await getSecretFromAWS(secretArn);
   if (!gmailRefreshToken) throw new Error('Gmail refresh token is empty.');

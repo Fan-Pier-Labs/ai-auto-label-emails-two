@@ -23,7 +23,7 @@ async function runLoop(): Promise<void> {
   config();
 
   const secretArn =
-    'arn:aws:secretsmanager:us-east-2:555985150976:secret:ryan-gmail-refresh-token-qv3WLe';
+    'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
   console.log('🔐 Fetching Gmail refresh token from AWS Secrets Manager...');
   const gmailRefreshToken = await getSecretFromAWS(secretArn);
   if (!gmailRefreshToken) {
@@ -35,8 +35,7 @@ async function runLoop(): Promise<void> {
   const dryRun = process.env.DRY_RUN !== undefined ? process.env.DRY_RUN === 'true' : true;
   const maxEmails = parseInt(process.env.MAX_EMAILS ?? '50', 10);
   const lookbackHours = parseInt(process.env.LOOKBACK_HOURS ?? '168', 10);
-  const runOnSpamFolder =
-    process.argv.includes('--spam-folder') || process.argv.includes('--run-on-spam-folder');
+  const runOnSpamFolder = process.argv.includes('--run-on-spam-folder');
   const query = runOnSpamFolder ? 'in:spam' : ''; // empty = all mail
 
   if (runOnSpamFolder) console.log('📬 Running on SPAM folder\n');

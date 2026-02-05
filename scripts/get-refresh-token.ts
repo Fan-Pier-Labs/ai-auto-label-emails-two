@@ -21,7 +21,7 @@ interface GoogleCreds {
 const SCOPES = ['https://www.googleapis.com/auth/gmail.modify'];
 const START_PORT = 8080;
 const MAX_PORT_ATTEMPTS = 100; // Try up to 100 ports (8080-8179)
-const SECRET_ARN = 'arn:aws:secretsmanager:us-east-2:555985150976:secret:ryan-gmail-refresh-token-qv3WLe';
+const SECRET_ARN = 'arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq';
 
 /**
  * Check if a port is available
