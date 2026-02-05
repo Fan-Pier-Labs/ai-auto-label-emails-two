@@ -7,6 +7,7 @@ const SECRET_KEYS = [
   'GEMINI_API_KEY',
   'STRIPE_METADATA_ENCRYPTION_KEY',
   'STRIPE_SECRET_KEY',
+  'PERSONAL_LINEAR_API_KEY',
 ] as const;
 
 type SecretKey = typeof SECRET_KEYS[number];

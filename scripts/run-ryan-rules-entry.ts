@@ -11,7 +11,7 @@ import { config } from 'dotenv';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { main, getSecretFromAWS } from './run-ryan-rules';
-import { getGeminiApiKey } from '../lib/secrets';
+import { loadSecretsFromAWS, getGeminiApiKey } from '../lib/secrets';
 import { GMAIL_REFRESH_TOKEN_SECRET_ARN } from '../lib/const';
 
 const INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -22,6 +22,8 @@ async function sleep(ms: number): Promise<void> {
 
 async function runLoop(): Promise<void> {
   config();
+
+  await loadSecretsFromAWS();
 
   console.log('🔐 Fetching Gmail refresh token from AWS Secrets Manager...');
   const gmailRefreshToken = await getSecretFromAWS(GMAIL_REFRESH_TOKEN_SECRET_ARN);

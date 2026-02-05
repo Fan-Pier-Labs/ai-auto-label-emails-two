@@ -5,11 +5,13 @@
  * dry run (default: true) so no labels are written to Gmail.
  *
  * Usage: bun run scripts/run-ryan-rules.ts
- *   Default: DRY RUN (no labels written). Set DRY_RUN=false to apply labels.
- *   DRY_RUN=false bun run scripts/run-ryan-rules.ts   # apply labels for real
+ *   Default: DRY RUN (no Gmail labels, no Linear posts). Set DRY_RUN=false or omit --dry-run to apply.
+ *   --dry-run   force dry run (no Gmail labels, no Linear comments)
+ *   DRY_RUN=false bun run scripts/run-ryan-rules.ts   # apply labels and Linear for real
  *   Default: all mail (inbox + spam + etc.). Use flags to narrow:
  *   --run-on-all-mail-except-spam  # run on all mail excluding spam
  *   --run-on-spam-folder           # run on spam folder only
+ *   --linear-sync-only            # only sync matching emails to Linear (no Gmail categorization)
  *   --test-sender         # print From + detected sender infra only (no rules, no labels)
  */
 import { config } from 'dotenv';
@@ -41,6 +43,12 @@ import { promises as dns } from 'dns';
 import { lookup as whoisLookup } from 'whois';
 import { getGeminiApiKey } from '../lib/secrets';
 import { GMAIL_REFRESH_TOKEN_SECRET_ARN } from '../lib/const';
+import {
+  getIssuesWithSyncLabels,
+  getIssueComments,
+  parseGmailSyncMessageIds,
+} from '../lib/linear';
+import { runEmailLoopWithLinearSync } from './ryan-linear-sync';
 import type { Email } from '../lib/types';
 import type { LabelRule } from '../lib/types';
 
@@ -100,6 +108,8 @@ interface MainParams {
   caches?: ProcessCaches;
   /** Optional set of already-processed email IDs to skip (mutated: new IDs added after processing). */
   processedIds?: Set<string>;
+  /** When true, only run Linear sync (no Gmail labels / Ryan rules). */
+  linearSyncOnly?: boolean;
 }
 
 type SenderInfra = 'gmail_msft' | 'aws_ses_sendgrid' | 'other';
@@ -548,7 +558,7 @@ async function runGmailMsftChecks(
 async function processEmailWithRyanRules(
   emailId: string,
   params: MainParams
-): Promise<string[]> {
+): Promise<{ labels: string[]; email: Email }> {
   const { dryRun } = params;
   const { email, headers } = await getEmailWithHeaders(emailId);
 
@@ -584,7 +594,7 @@ async function processEmailWithRyanRules(
       } else {
         console.log(`   [Rule 1 Gmail] Matches filter (no label action) (stop)`);
       }
-      return labels;
+      return { labels, email };
     }
   }
 
@@ -605,7 +615,7 @@ async function processEmailWithRyanRules(
       await applyLabels(emailId, labels);
       console.log(`   ✅ Applied: ${labels.join(', ')}`);
     }
-    return labels;
+    return { labels, email };
   }
 
   // ---- Rule 3: Ever emailed this person or their domain → important, stop ----
@@ -634,7 +644,7 @@ async function processEmailWithRyanRules(
         console.log(`   ✅ Applied: ${labels.join(', ')}`);
       }
     }
-    return labels;
+    return { labels, email };
   }
 
   // ---- Rule 4: Same thread as someone I've emailed → important, stop ----
@@ -670,7 +680,7 @@ async function processEmailWithRyanRules(
         console.log(`   ✅ Applied: ${labels.join(', ')}`);
       }
     }
-    return labels;
+    return { labels, email };
   }
 
   // ---- Rule 5: From @docs.google.com → important, stop ----
@@ -687,7 +697,7 @@ async function processEmailWithRyanRules(
       await applyLabels(emailId, labels);
       console.log(`   ✅ Applied: ${labels.join(', ')}`);
     }
-    return labels;
+    return { labels, email };
   }
 
   // ---- Rule 6: Job applicant (known job-portal domains, then AI) → label, stop ----
@@ -704,7 +714,7 @@ async function processEmailWithRyanRules(
       await applyLabels(emailId, labels);
       console.log(`   ✅ Applied: ${labels.join(', ')}`);
     }
-    return labels;
+    return { labels, email };
   }
 
   const jobPrompt =
@@ -721,7 +731,7 @@ async function processEmailWithRyanRules(
         console.log(`   ✅ Applied: ${labels.join(', ')}`);
       }
     }
-    return labels;
+    return { labels, email };
   }
 
   // ---- Sender infrastructure: client IP WHOIS → MX → From domain → Received ----
@@ -756,7 +766,7 @@ async function processEmailWithRyanRules(
           console.log(`   ✅ Applied: ${labels.join(', ')}`);
         }
       }
-      return labels;
+      return { labels, email };
     }
   } else {
     labels.push('unknown sender mail system');
@@ -825,7 +835,7 @@ async function processEmailWithRyanRules(
     }
   }
 
-  return labels;
+  return { labels, email };
 }
 
 // ---------------------------------------------------------------------------
@@ -864,7 +874,14 @@ async function main(params: MainParams): Promise<void> {
   }
 
   if (params.dryRun) {
-    console.log('⚠️  DRY RUN MODE - No labels will be applied to Gmail\n');
+    console.log('⚠️  DRY RUN MODE - No Gmail labels and no Linear comments will be applied\n');
+  }
+  if (params.linearSyncOnly) {
+    console.log('📌 LINEAR SYNC ONLY - No Gmail categorization (Ryan rules)\n');
+    if (!process.env.PERSONAL_LINEAR_API_KEY?.trim()) {
+      console.log('Linear sync only requires PERSONAL_LINEAR_API_KEY. Exiting.\n');
+      return;
+    }
   }
 
   const lookbackHours = params.lookbackHours ?? 24;
@@ -881,10 +898,14 @@ async function main(params: MainParams): Promise<void> {
     clientSecret: gmailClientSecret,
     refreshToken: params.gmailRefreshToken,
   });
-  await initializeGemini(params.geminiApiKey);
 
-  // Fetch all Gmail filters — Rule 1 applies matching filter actions and stops
+  if (!params.linearSyncOnly) {
+    await initializeGemini(params.geminiApiKey);
+  }
+
+  // Fetch all Gmail filters — Rule 1 applies matching filter actions and stops (skip when linear-sync-only)
   let allFilters: GmailFilter[] = [];
+  if (!params.linearSyncOnly) {
   try {
     allFilters = await listGmailFilters();
     if (allFilters.length > 0) {
@@ -910,9 +931,39 @@ async function main(params: MainParams): Promise<void> {
   } catch (err: any) {
     console.warn('⚠️  Could not load Gmail filters (scope gmail.settings.basic may be needed):', err?.message ?? err);
   }
+  }
 
   const caches = createProcessCaches();
   const paramsWithFilters: MainParams = { ...params, allFilters, caches };
+
+  // Linear sync: load issues with sync: labels and build reverse index + processedIdsByIssue
+  let reverseIndex = new Map<string, string[]>();
+  let processedIdsByIssue = new Map<string, Set<string>>();
+  if (process.env.PERSONAL_LINEAR_API_KEY?.trim()) {
+    try {
+      const { reverseIndex: idx, issueIds } = await getIssuesWithSyncLabels();
+      reverseIndex = idx;
+      for (const issueId of issueIds) {
+        const comments = await getIssueComments(issueId);
+        const messageIds = parseGmailSyncMessageIds(comments);
+        processedIdsByIssue.set(issueId, new Set(messageIds));
+      }
+      if (issueIds.length > 0) {
+        console.log(`📌 Linear: ${issueIds.length} issue(s) with sync labels (reverse index: ${reverseIndex.size} keys)`);
+        const labels = [...reverseIndex.keys()].sort();
+        console.log(`   Sync labels: ${labels.join(', ')}\n`);
+      }
+    } catch (err: any) {
+      console.warn('⚠️  Could not load Linear sync state:', err?.message ?? err);
+      reverseIndex = new Map();
+      processedIdsByIssue = new Map();
+    }
+  }
+
+  if (params.linearSyncOnly && reverseIndex.size === 0) {
+    console.log('Linear sync only: no issues with sync labels found. Exiting.\n');
+    return;
+  }
 
   const emailIds = await searchEmails(query, maxEmails, false, params.includeSpamTrash);
   const toProcess = params.processedIds
@@ -933,16 +984,27 @@ async function main(params: MainParams): Promise<void> {
   }
   console.log(`Found ${toProcess.length} email(s) to process.\n`);
 
-  for (let i = 0; i < toProcess.length; i++) {
-    const emailId = toProcess[i];
-    console.log(`\n[${i + 1}/${toProcess.length}]`);
-    try {
-      await processEmailWithRyanRules(emailId, paramsWithFilters);
-      params.processedIds?.add(emailId);
-    } catch (err: any) {
-      console.error(`   ❌ Error: ${err.message}`);
+  const processOneEmail = async (emailId: string): Promise<Email | undefined> => {
+    if (params.linearSyncOnly) {
+      const { email } = await getEmailWithHeaders(emailId);
+      console.log(`📧 ${email.subject}`);
+      console.log(`   From: ${email.from}`);
+      return email;
     }
-  }
+    const result = await processEmailWithRyanRules(emailId, paramsWithFilters);
+    params.processedIds?.add(emailId);
+    return result.email;
+  };
+
+  await runEmailLoopWithLinearSync({
+    toProcess,
+    dryRun: params.dryRun,
+    linearSyncOnly: params.linearSyncOnly ?? false,
+    processedIds: params.processedIds,
+    reverseIndex,
+    processedIdsByIssue,
+    processOneEmail,
+  });
 
   console.log('\n✅ Ryan rules processing complete.\n');
 }
@@ -969,11 +1031,14 @@ async function test(): Promise<void> {
   console.log(`✅ Refresh token fetched (length: ${gmailRefreshToken.length})`);
 
   const geminiApiKey = await getGeminiApiKey();
-  const dryRun = process.env.DRY_RUN !== undefined ? process.env.DRY_RUN === 'true' : true;
+  const dryRunFlag = process.argv.includes('--dry-run');
+  const dryRun =
+    dryRunFlag || (process.env.DRY_RUN !== undefined ? process.env.DRY_RUN === 'true' : true);
   const maxEmails = parseInt(process.env.MAX_EMAILS ?? '5', 10);
   const lookbackHours = parseInt(process.env.LOOKBACK_HOURS ?? '168', 10); // 1 week default
   const runOnSpamFolder = process.argv.includes('--run-on-spam-folder');
   const runOnAllMailExceptSpam = process.argv.includes('--run-on-all-mail-except-spam');
+  const linearSyncOnly = process.argv.includes('--linear-sync-only');
   // Default: all mail (inbox + spam + etc.). --run-on-all-mail-except-spam = exclude spam. --run-on-spam-folder = spam only.
   const query = runOnSpamFolder ? 'in:spam' : '';
   const includeSpamTrash = !runOnSpamFolder && !runOnAllMailExceptSpam; // true = default (everything)
@@ -989,6 +1054,7 @@ async function test(): Promise<void> {
     maxEmails,
     lookbackHours,
     includeSpamTrash,
+    linearSyncOnly,
   });
 
   console.log('✅ Test complete.\n');
