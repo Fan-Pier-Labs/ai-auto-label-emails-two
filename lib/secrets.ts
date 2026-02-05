@@ -1,6 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 
-const APP_SECRETS_ARN = 'arn:aws:secretsmanager:us-east-2:555985150976:secret:AI_EMAIL_LABELING_APP-lBzZpo';
+const APP_SECRETS_ARN = 'arn:aws:secretsmanager:us-east-2:066949051862:secret:AI_EMAIL_LABELING_APP-6h2UPx';
 
 // Secrets that should be loaded from AWS Secrets Manager
 const SECRET_KEYS = [
