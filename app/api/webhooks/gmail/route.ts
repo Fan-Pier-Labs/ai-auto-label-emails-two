@@ -73,16 +73,33 @@ export async function POST(request: NextRequest) {
       refreshToken: config.refreshToken,
     });
 
-    let messageIds: string[];
+    // Use our stored historyId for startHistoryId (required by Gmail sync: do not use the
+    // notification's historyId directly). Fallback: notification historyId is often the new
+    // id, so request history after (id - 1) to include the change that triggered the push.
+    const storedHistoryId = config.metadata?.gmail_history_id?.trim();
+    const startHistoryId =
+      storedHistoryId ||
+      (() => {
+        const n = Number(historyId);
+        return Number.isFinite(n) && n > 0 ? String(n - 1) : historyId;
+      })();
+
+    let result: { messageIds: string[]; newHistoryId: string | undefined };
     try {
-      messageIds = await listHistory(historyId);
+      result = await listHistory(startHistoryId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Gmail webhook] history.list failed for ${emailAddress}:`, msg);
       return NextResponse.json({ received: true, error: 'history_failed' });
     }
 
+    const { messageIds, newHistoryId } = result;
     if (messageIds.length === 0) {
+      if (newHistoryId) {
+        await stripe.customers.update(config.customerId, {
+          metadata: { ...config.metadata, gmail_history_id: newHistoryId },
+        });
+      }
       return NextResponse.json({ received: true, processed: 0 });
     }
 
@@ -110,6 +127,12 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.error(`[Gmail webhook] processEmail failed for ${messageId}:`, err);
       }
+    }
+
+    if (newHistoryId) {
+      await stripe.customers.update(config.customerId, {
+        metadata: { ...config.metadata, gmail_history_id: newHistoryId },
+      });
     }
 
     return NextResponse.json({ received: true, processed });

@@ -119,11 +119,12 @@ export async function POST(request: NextRequest) {
             clientSecret,
             refreshToken,
           });
-          const { expiration } = await setWatch(topicName.trim());
+          const { expiration, historyId } = await setWatch(topicName.trim());
           await stripe.customers.update(customerId, {
             metadata: {
               ...metadata,
               gmail_watch_expiration: expiration,
+              gmail_history_id: historyId,
             },
           });
           console.log(`✅ Gmail watch set for ${customerEmail}, expires ${expiration}`);

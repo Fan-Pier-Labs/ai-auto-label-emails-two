@@ -72,11 +72,12 @@ async function main(): Promise<void> {
 
       try {
         initializeGmail({ clientId, clientSecret, refreshToken });
-        const { expiration } = await setWatch(topicName);
+        const { expiration, historyId } = await setWatch(topicName);
         await stripe.customers.update(customer.id, {
           metadata: {
             ...metadata,
             gmail_watch_expiration: expiration,
+            gmail_history_id: historyId,
           },
         });
         console.log(`✅ Renewed watch for ${gmailEmail} (expires ${expiration})`);
