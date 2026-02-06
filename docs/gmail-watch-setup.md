@@ -36,6 +36,17 @@ Use the same Google Cloud project as your Gmail OAuth client.
 - Set the env var **GMAIL_PUBSUB_TOPIC** to the full topic name, e.g.  
   `projects/<project-id>/topics/gmail-watch`.
 
+### 5. Push authentication (recommended)
+
+To ensure only your Pub/Sub subscription can trigger the webhook, enable **OIDC token authentication** on the push subscription in GCP and set:
+
+- **GMAIL_WEBHOOK_AUDIENCE** – The full webhook URL (must match the push endpoint URL), e.g.  
+  `https://<your-domain>/api/webhooks/gmail`. This is the audience claim in the token.
+- **GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL** – The service account email used by the push subscription (e.g.  
+  `pubsub-push-auth@<project-id>.iam.gserviceaccount.com`).
+
+The app verifies the `Authorization: Bearer <token>` JWT (signature, audience, issuer, and service account email) before processing any push. If either env var is missing, the webhook returns 401 for POST requests.
+
 ## Watch renewal
 
 Gmail watch expires (typically within 7 days). Run the renewal script on a schedule (e.g. daily or every 6 hours):
@@ -48,5 +59,5 @@ Or invoke it from cron/Fargate. The script lists active Stripe subscribers, and 
 
 ## Security
 
-- The webhook at `/api/webhooks/gmail` is called by Google Pub/Sub. You can add verification (e.g. validate the push JWT or require a shared secret header) to ensure requests come from your subscription.
+- The webhook at `/api/webhooks/gmail` is called by Google Pub/Sub. When **GMAIL_WEBHOOK_AUDIENCE** and **GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL** are set, the app validates the push JWT (Bearer token) before processing so only authenticated Pub/Sub requests are accepted.
 - Do not expose internal endpoints; use your public app URL for the push subscription.

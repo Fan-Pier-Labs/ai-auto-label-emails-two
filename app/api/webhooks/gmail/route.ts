@@ -1,15 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { OAuth2Client } from 'google-auth-library';
 import Stripe from 'stripe';
 import { getCustomerConfigByEmail } from '@/lib/stripe-customers';
 import { getOAuthCredentials } from '@/lib/gmail-oauth';
 import { initializeGmail, listHistory } from '@/lib/gmail';
 import { getGeminiApiKey } from '@/lib/secrets';
 import { processEmail } from '@/lib/processor';
+import { getAppBaseUrl } from '@/lib/app-url';
 
 function getStripe(): Stripe {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) throw new Error('STRIPE_SECRET_KEY is not set');
   return new Stripe(secretKey, { apiVersion: '2026-01-28.clover' });
+}
+
+/** Single 401 response for all auth failures (no info leakage). */
+function unauthorized(): NextResponse {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+/** Verify Pub/Sub push JWT; returns null on success, 401 response on failure. */
+async function verifyPubSubAuth(request: NextRequest): Promise<NextResponse | null> {
+  const expectedAudience =
+    process.env.GMAIL_WEBHOOK_AUDIENCE ||
+    `${getAppBaseUrl()}/api/webhooks/gmail`;
+  const expectedServiceAccountEmail =
+    process.env.GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL;
+
+  if (!expectedServiceAccountEmail) {
+    return unauthorized();
+  }
+
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return unauthorized();
+  }
+
+  const token = authHeader.slice('Bearer '.length);
+  const client = new OAuth2Client();
+
+  try {
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: expectedAudience,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload) {
+      return unauthorized();
+    }
+
+    if (payload.iss !== 'https://accounts.google.com') {
+      return unauthorized();
+    }
+
+    if (payload.email !== expectedServiceAccountEmail) {
+      return unauthorized();
+    }
+
+    return null;
+  } catch {
+    return unauthorized();
+  }
 }
 
 /** Decode URL-safe base64 (Pub/Sub message.data). */
@@ -34,6 +86,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authFailure = await verifyPubSubAuth(request);
+    if (authFailure) return authFailure;
+
     const body = await request.json();
     const message = body?.message;
     const rawData = message?.data;
