@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Spinner } from "@/components/ui/spinner"
 import { Trash2, Sparkles, Plus, Pencil, PartyPopper } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "@/hooks/use-toast"
@@ -517,9 +518,6 @@ export function InteractiveDemo() {
                       <Plus className="h-4 w-4" />
                     </Button>
                   )}
-                  {loadingDeterministic && (
-                    <span className="text-xs text-muted-foreground shrink-0">Running…</span>
-                  )}
                 </div>
                 <p className="mb-1.5 sm:mb-2 text-xs text-muted-foreground shrink-0">
                   AI decides from domain, DNS, SMTP checks (e.g. can it be scam? is it a new startup?).
@@ -620,7 +618,15 @@ export function InteractiveDemo() {
           <div className="min-h-0 min-w-0 w-full max-w-full flex flex-col h-auto lg:h-full overflow-hidden box-border">
             <Card className="p-3 sm:p-6 w-full max-w-full flex flex-col min-h-0 h-[400px] sm:h-[450px] lg:h-full overflow-hidden box-border">
               <div className="mb-2 sm:mb-4 flex items-center justify-between gap-2">
-                <h3 className="text-sm sm:text-lg font-semibold shrink-0">Inbox</h3>
+                <div className="flex items-center gap-2 shrink-0 min-w-0">
+                  <h3 className="text-sm sm:text-lg font-semibold">Inbox</h3>
+                  {(loading || loadingDeterministic) && (
+                    <Badge variant="secondary" className="text-xs gap-1 shrink-0 animate-pulse" aria-label="Applying labels">
+                      <Spinner className="size-3" />
+                      <span>Processing...</span>
+                    </Badge>
+                  )}
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
