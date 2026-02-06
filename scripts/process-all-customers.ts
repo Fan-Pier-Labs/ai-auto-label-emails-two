@@ -1,26 +1,14 @@
 #!/usr/bin/env node
 import Stripe from 'stripe';
 import { config } from 'dotenv';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { safeDecrypt } from '../lib/encryption';
 import { getGeminiApiKey } from '../lib/secrets';
+import { getOAuthCredentials } from '../lib/gmail-oauth';
 import { ProcessingSession } from '../lib/processor-utils';
 import { analytics } from '../lib/analytics';
 
 // Load .env file if it exists
 config();
-
-interface GoogleCreds {
-  web?: {
-    client_id: string;
-    client_secret: string;
-  };
-  installed?: {
-    client_id: string;
-    client_secret: string;
-  };
-}
 
 interface CustomerResult {
   customerId: string;
@@ -50,45 +38,6 @@ function getStripe(): Stripe {
   return new Stripe(secretKey, {
     apiVersion: '2026-01-28.clover',
   });
-}
-
-/**
- * Gets Gmail OAuth credentials from environment or google_creds.json
- */
-function getOAuthCredentials(): { clientId: string; clientSecret: string } {
-  // First try environment variables
-  const envClientId = process.env.GMAIL_CLIENT_ID;
-  const envClientSecret = process.env.GMAIL_CLIENT_SECRET;
-
-  if (envClientId && envClientSecret) {
-    return { clientId: envClientId, clientSecret: envClientSecret };
-  }
-
-  // Fallback to google_creds.json
-  try {
-    const credsPath = join(process.cwd(), 'google_creds.json');
-    const credsContent = readFileSync(credsPath, 'utf-8');
-    const creds: GoogleCreds = JSON.parse(credsContent);
-
-    const webCreds = creds.web || creds.installed;
-    if (webCreds?.client_id && webCreds?.client_secret) {
-      return {
-        clientId: webCreds.client_id,
-        clientSecret: webCreds.client_secret,
-      };
-    }
-  } catch (error: any) {
-    if (error.code !== 'ENOENT') {
-      console.error('Error reading google_creds.json:', error);
-    }
-  }
-
-  throw new Error(
-    '❌ Missing Google OAuth credentials!\n\n' +
-    'Either:\n' +
-    '1. Create google_creds.json in the project root (download from https://console.cloud.google.com/apis/credentials), or\n' +
-    '2. Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET environment variables'
-  );
 }
 
 /**

@@ -261,6 +261,61 @@ export async function getEmail(messageId: string): Promise<Email> {
   );
 }
 
+/**
+ * List message IDs from history after a given startHistoryId (for Gmail push notifications).
+ * Call initializeGmail first so the client is set for the user whose mailbox to query.
+ * Returns IDs of messages that were added (new messages).
+ */
+export async function listHistory(startHistoryId: string): Promise<string[]> {
+  const client = getClient();
+  const gmail = google.gmail({ version: 'v1', auth: client });
+  const messageIds: string[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const response = await gmail.users.history.list({
+      userId: 'me',
+      startHistoryId,
+      maxResults: 100,
+      historyTypes: ['messageAdded'],
+      pageToken,
+    });
+
+    const history = response.data.history || [];
+    for (const record of history) {
+      const added = record.messagesAdded || [];
+      for (const item of added) {
+        if (item.message?.id) {
+          messageIds.push(item.message.id);
+        }
+      }
+    }
+
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return messageIds;
+}
+
+/**
+ * Set up Gmail push watch for the authenticated user (call initializeGmail first).
+ * topicName must be the full Pub/Sub topic, e.g. projects/my-project/topics/gmail-watch.
+ * Returns the watch expiration timestamp in epoch ms (string).
+ */
+export async function setWatch(topicName: string): Promise<{ expiration: string }> {
+  const client = getClient();
+  const gmail = google.gmail({ version: 'v1', auth: client });
+  const response = await gmail.users.watch({
+    userId: 'me',
+    requestBody: { topicName },
+  });
+  const expiration = response.data.expiration;
+  if (!expiration) {
+    throw new Error('Gmail watch response missing expiration');
+  }
+  return { expiration };
+}
+
 export interface EmailWithHeaders {
   email: Email;
   headers: Array<{ name: string; value: string }>;
