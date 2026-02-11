@@ -3,9 +3,11 @@ app_name: "ai-email-labels-2"
 aws:
   profile: "ryanhughes624"
   region: "us-east-2"
-# public:
-#   domain: "ai-email-labels.fanpierlabs.com"
-#   mode: "production"
+public:
+  domain: "ai-email-labels.ryanhughes624.com"
+  mode: "production"
+  # Wildcard cert covering *.fanpierlabs.com and *.ryanhughes624.com (us-east-1 for CloudFront)
+  certificate_id: "19e3e960-956c-4641-87f9-88ceb9e7912a"
 
 task:
   cpu: 1024
@@ -23,7 +25,10 @@ secrets:
   - arn:aws:secretsmanager:us-east-2:066949051862:secret:AI_EMAIL_LABELING_APP-6h2UPx
   - arn:aws:secretsmanager:us-east-2:066949051862:secret:ryan-gmail-refresh-token-iVkQdq
 
-# Required: ecsTaskExecutionRole needs GetSecretValue so the task can read secrets at runtime.
+# Required: the ECS task uses ecsTaskExecutionRole for runtime SDK calls (Secrets Manager).
+# custom_iam_policy may be applied by the deploy tool to a role it creates; if your task
+# uses the account's ecsTaskExecutionRole, attach this policy manually, e.g.:
+#   aws iam put-role-policy --role-name ecsTaskExecutionRole --policy-name AIEmailLabelsSecretsManager --policy-document file://scripts/ecs-secrets-policy.json
 custom_iam_policy:
   Version: "2012-10-17"
   Statement:
