@@ -94,7 +94,7 @@ export function Options() {
               <p className="mb-1 text-2xl sm:text-3xl font-bold text-foreground">$9<span className="text-base sm:text-lg font-normal text-muted-foreground">/month</span></p>
               <p className="mb-3 sm:mb-4 text-xs sm:text-sm text-muted-foreground">Cancel anytime</p>
               <Button asChild className="w-full text-sm sm:text-base">
-                <Link href="/api/auth/gmail">
+                <Link href="https://calendly.com/fanpierlabs/ai-email-app-setup" target="_blank" rel="noopener noreferrer">
                   <span className="hidden sm:inline">Get Started</span>
                   <span className="sm:hidden">Get Started - email ryan@fanpierlabs.com</span>
                 </Link>
