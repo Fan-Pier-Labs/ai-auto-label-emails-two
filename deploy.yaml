@@ -13,7 +13,7 @@ task:
   cpu: 1024
   memory: 2048
   spot: true
-  replicas: 1
+  replicas: 0
   ephemeral_storage: 21
   port: 8080
 
