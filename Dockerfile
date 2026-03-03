@@ -23,7 +23,7 @@ ENV NEXT_TEMPLATE_SHEET_URL="https://docs.google.com/spreadsheets/d/1oRvLEi2uj0E
 ENV NEXT_PUBLIC_SENTRY_DSN=https://e7a7507393aefe55d824ccb80865a1c5@o4509283904323584.ingest.us.sentry.io/4510797815545856
 ENV SENTRY_ORG=fan-pier-labs
 ENV SENTRY_PROJECT=ai-auto-label-emails
-ENV SENTRY_AUTH_TOKEN=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
+# SENTRY_AUTH_TOKEN loaded from AWS Secrets Manager at runtime
 ENV NEXT_APP_URL=https://ai-email-labels.fanpierlabs.com
 
 # Health check (uses scripts/healthcheck.ts via package.json)

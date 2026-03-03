@@ -8,6 +8,7 @@ const SECRET_KEYS = [
   'STRIPE_METADATA_ENCRYPTION_KEY',
   'STRIPE_SECRET_KEY',
   'PERSONAL_LINEAR_API_KEY',
+  'SENTRY_AUTH_TOKEN',
 ] as const;
 
 type SecretKey = typeof SECRET_KEYS[number];
