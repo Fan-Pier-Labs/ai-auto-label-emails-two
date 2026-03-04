@@ -85,7 +85,8 @@ async function bootstrap(): Promise<void> {
     processedIds: new Set<string>(),
   };
 
-  startRyanRulesLoop(ryanParams);
+  // Ryan rules cron loop disabled for now
+  // startRyanRulesLoop(ryanParams);
   await startNextServer();
 }
 

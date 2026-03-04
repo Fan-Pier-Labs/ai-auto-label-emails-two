@@ -1,6 +1,6 @@
 # Auto Label Emails with AI
 
-A Next.js application that automatically labels emails using AI-powered rules with Gemini AI. This project combines a modern web interface with powerful email classification capabilities.
+A Next.js application that automatically labels emails using AI-powered rules with Gemini AI. This project combines a modern web interface with powerful email classification capabilities — and supports highly custom, programmable rule logic far beyond what any email client offers out of the box.
 
 ## Features
 
@@ -8,6 +8,8 @@ A Next.js application that automatically labels emails using AI-powered rules wi
 - **Gmail Automation**: Automatically label emails in your Gmail inbox
 - **Google Sheets Integration**: Load classification rules from a Google Sheet (optional)
 - **Deterministic Rules**: Built-in rules for first-time senders, domains, and email history
+- **Highly Custom Logic**: Write arbitrarily complex rule pipelines mixing deterministic checks, network lookups, and AI calls (see [Custom Rule Logic](#custom-rule-logic) below)
+- **Linear Integration**: Automatically sync matching emails to Linear issues by sender address/domain
 - **Interactive Demo**: Try the classifier directly in your browser with example emails
 - **Background Processing**: Continuously monitor and label new emails
 - **Rate Limiting**: Built-in IP and cookie-based rate limiting to prevent abuse
@@ -25,7 +27,7 @@ A Next.js application that automatically labels emails using AI-powered rules wi
 
 ## Prerequisites
 
-- Node.js 18+ or Bun runtime (recommended)
+- [Bun](https://bun.sh/) runtime
 - Google Gemini API key (get it from [Google AI Studio](https://makersuite.google.com/app/apikey))
 
 ## Quick Start
@@ -38,14 +40,8 @@ cd auto-label-email-dir
 
 ### 2. Install Dependencies
 
-Using Bun (recommended):
 ```bash
 bun install
-```
-
-Using npm:
-```bash
-npm install
 ```
 
 ### 3. Configure Environment Variables
@@ -66,14 +62,8 @@ GOOGLE_SHEETS_URL=https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edi
 
 ### 4. Run the Development Server
 
-Using Bun (recommended):
 ```bash
 bun dev
-```
-
-Using npm:
-```bash
-npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
@@ -165,6 +155,51 @@ The processor automatically applies these labels based on email history:
 
 These work alongside your AI rules!
 
+## Custom Rule Logic
+
+The system supports highly custom, programmable rule pipelines that go far beyond simple label matching. You can mix deterministic checks, network lookups, WHOIS queries, and AI calls into a single ordered pipeline with short-circuit logic. Here is an example of the kind of custom logic that has been built with this system (see `scripts/run-ryan-rules.ts`):
+
+### Example: A Real-World Custom Pipeline
+
+This pipeline processes every incoming email through an ordered sequence of rules, stopping early when a match is found:
+
+1. **Gmail filter matching** — Checks if the email matches any existing Gmail filter. If so, applies that filter's actions and stops.
+2. **Starred sender check** — If you have ever starred an email to or from this sender, marks the email as important and stops.
+3. **Prior contact check** — If you have ever emailed the sender (or anyone at their domain), or if they are on the same thread as someone you have emailed, marks as important and stops.
+4. **Known domain shortcut** — Emails from trusted domains like `@docs.google.com` are marked important immediately.
+5. **AI job applicant detection** — Uses Gemini to determine if the email is a job application (mentions qualifications, work experience, resumes). Labels as `ai job applicant` and stops.
+6. **Sender infrastructure detection** — Inspects email headers to determine how the email was sent:
+   - Extracts the client IP from `Received-SPF` / `Authentication-Results` headers
+   - Runs a WHOIS lookup on the IP to identify the sending organization
+   - Falls back to MX record lookups and `Received` header pattern matching
+   - Categorizes the sender as **Gmail/Microsoft** (personal/work email), **AWS SES/SendGrid** (automated/marketing), or **other**
+7. **Spam scoring for personal senders** (Gmail/Microsoft) — Runs four checks against the sender's domain:
+   - Was the domain registered in the last 2 months?
+   - Is the domain up with valid HTTPS?
+   - Does the reply-to address match the from address?
+   - Does the domain redirect to a different site?
+   - 1 failure = `ai might be spam`, 2+ failures = `ai thinks spam` + marked not important
+8. **Cold email detection** (AWS SES/SendGrid) — Uses Gemini to detect personalized cold outreach (e.g., "Hi Ryan, I noticed Fan Pier Labs..."). Labels as `ai detected cold email` and stops.
+9. **Event classification** — Multiple AI calls to categorize event-related emails:
+   - Online events/webinars (labeled `ai online event`)
+   - Poker nights (labeled `ai poker night`)
+   - NYC startup/tech events in Manhattan or Brooklyn (labeled `ai nyc event`)
+   - Events from well-known tech companies like Vercel, Stripe, or Anthropic (labeled `ai brand event`)
+10. **Event importance routing** — Online-only events are marked not important; NYC events, poker nights, and brand-name events are marked important.
+
+### Linear Integration
+
+The custom pipeline also supports syncing emails to Linear issues. When configured, emails matching specific senders or domains are automatically posted as comments on the corresponding Linear issue — useful for tracking conversations with specific contacts alongside your project management workflow.
+
+### Building Your Own Custom Logic
+
+You can write your own rule script following the same pattern:
+- Define an ordered list of rules with conditions and actions
+- Use short-circuit logic (stop processing on match) or fall-through (continue to next rule)
+- Mix deterministic checks (domain lookups, header inspection, WHOIS) with AI calls
+- Apply any combination of Gmail labels, importance flags, and external integrations
+- Run the script on a schedule with the entry-point wrapper (e.g., every 15 minutes)
+
 ## Usage
 
 ### Interactive Demo
@@ -182,13 +217,13 @@ You can define your classification rules in a Google Sheet instead of manually e
 1. **Create a Google Sheet** with two columns:
    - Column 1: Label name (e.g., "Shopping", "Newsletter")
    - Column 2: Rule description (e.g., "order confirmation or shipping")
-   
-2. **Make it public**: 
+
+2. **Make it public**:
    - Click "Share" → Change to "Anyone with the link can view"
-   
+
 3. **Get the URL or ID**:
    - Copy the full URL or just the spreadsheet ID
-   
+
 4. **Add to `.env.local`**:
    ```bash
    GOOGLE_SHEETS_URL=https://docs.google.com/spreadsheets/d/YOUR_ID/edit
@@ -275,8 +310,16 @@ auto-label-email-dir/
 │   ├── features.tsx              # Features section
 │   ├── options.tsx               # Deployment options
 │   └── ...                       # Other components
+├── scripts/
+│   ├── run-ryan-rules.ts         # Example custom rule pipeline
+│   ├── run-ryan-rules-entry.ts   # Entry point (runs every 15 min)
+│   └── ryan-linear-sync.ts       # Linear integration for email sync
 ├── lib/
 │   ├── ai-labeler.ts             # Gemini AI integration
+│   ├── deterministic.ts          # Domain/DNS/WHOIS checks
+│   ├── gmail.ts                  # Gmail API wrapper
+│   ├── gemini.ts                 # Gemini API wrapper
+│   ├── linear.ts                 # Linear API integration
 │   ├── rate-limit.ts             # Rate limiting logic
 │   ├── types.ts                  # TypeScript types
 │   └── utils.ts                  # Utility functions
@@ -293,7 +336,7 @@ auto-label-email-dir/
 Edit `app/api/classify/route.ts` to adjust rate limits:
 
 ```typescript
-const rateLimit = checkRateLimit(clientId, { 
+const rateLimit = checkRateLimit(clientId, {
   maxRequests: 20,    // Max requests
   windowMs: 60000     // Time window (ms)
 });
@@ -304,7 +347,7 @@ const rateLimit = checkRateLimit(clientId, {
 Edit `lib/ai-labeler.ts` to change the Gemini model:
 
 ```typescript
-const model = geminiClient.getGenerativeModel({ 
+const model = geminiClient.getGenerativeModel({
   model: 'gemini-1.5-flash'  // or 'gemini-1.5-pro'
 });
 ```
@@ -337,23 +380,7 @@ This is a standard Next.js app and can be deployed to:
 - AWS Amplify
 - Railway
 - Render
-- Any Node.js hosting platform
-
-## Gmail Integration (Optional)
-
-For production use with Gmail, you'll need OAuth credentials:
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Enable Gmail API
-4. Create OAuth 2.0 credentials
-5. Add environment variables:
-
-```bash
-GMAIL_CLIENT_ID=your_client_id
-GMAIL_CLIENT_SECRET=your_client_secret
-GMAIL_REFRESH_TOKEN=your_refresh_token
-```
+- Any platform that supports Bun or Node.js
 
 ## Development
 
@@ -368,13 +395,13 @@ GMAIL_REFRESH_TOKEN=your_refresh_token
 
 ```bash
 # Run the dev server
-npm run dev
+bun dev
 
 # Build for production
-npm run build
+bun run build
 
 # Start production server
-npm start
+bun start
 ```
 
 ## Troubleshooting
@@ -395,7 +422,7 @@ npm start
 
 ## License
 
-MIT
+AGPL-3.0 — see [LICENSE](LICENSE) for details.
 
 ## Credits
 
