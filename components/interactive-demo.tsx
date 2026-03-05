@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Sparkles, Plus, Pencil, PartyPopper } from "lucide-react"
+import { Trash2, Sparkles, Plus, Pencil, PartyPopper, Loader2 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -513,7 +513,10 @@ export function InteractiveDemo() {
           <div className="min-h-0 min-w-0 w-full max-w-full flex flex-col h-auto lg:h-full overflow-hidden box-border">
             <Card className="p-3 sm:p-6 w-full max-w-full flex flex-col min-h-0 h-[400px] sm:h-[450px] lg:h-full overflow-hidden box-border">
               <div className="mb-2 sm:mb-4 flex items-center justify-between gap-2">
-                <h3 className="text-sm sm:text-lg font-semibold shrink-0">Inbox</h3>
+                <div className="flex items-center gap-2 shrink-0">
+                  <h3 className="text-sm sm:text-lg font-semibold">Inbox</h3>
+                  {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
