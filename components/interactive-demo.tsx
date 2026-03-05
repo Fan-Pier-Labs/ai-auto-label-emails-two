@@ -201,8 +201,9 @@ export function InteractiveDemo() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rules, hasUserEdited, emails])
 
-  // Auto-run deterministic rules when rules or emails change (debounced)
+  // Auto-run deterministic rules when rules or emails change (debounced) - only if user has edited
   useEffect(() => {
+    if (!hasUserEdited) return
     if (deterministicTimeoutRef.current) clearTimeout(deterministicTimeoutRef.current)
     const ruleConfigs = savedDeterministicRules.map(r => ({ label: r.label, enabled: r.enabled, prompt: r.prompt }))
     const enabledCount = ruleConfigs.filter(c => c.enabled).length
@@ -233,7 +234,7 @@ export function InteractiveDemo() {
       if (deterministicTimeoutRef.current) clearTimeout(deterministicTimeoutRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deterministicRules, emails])
+  }, [deterministicRules, emails, hasUserEdited])
 
   const updateRule = (id: string, field: "label" | "prompt", value: string) => {
     setHasUserEdited(true)
@@ -499,119 +500,11 @@ export function InteractiveDemo() {
                 )}
               </div>
 
-              {/* Deterministic rules section - same layout as AI Labels */}
-              <div className="border-t border-border pt-2 sm:pt-4 min-w-0 w-full flex flex-col flex-1 min-h-0 overflow-hidden">
-                <div className="mb-1.5 sm:mb-3 flex items-center justify-between gap-2 shrink-0">
-                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                    <Sparkles className="h-4 w-4 shrink-0" />
-                    <h3 className="text-sm sm:text-lg font-semibold truncate">Deterministic Rules</h3>
-                  </div>
-                  {!isDetFormOpen && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={openAddDetForm}
-                      className="h-8 w-8 cursor-pointer shrink-0"
-                      aria-label="Add deterministic rule"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {loadingDeterministic && (
-                    <span className="text-xs text-muted-foreground shrink-0">Running…</span>
-                  )}
-                </div>
-                <p className="mb-1.5 sm:mb-2 text-xs text-muted-foreground shrink-0">
-                  AI decides from domain, DNS, SMTP checks (e.g. can it be scam? is it a new startup?).
+              {/* How labels work - info blurb */}
+              <div className="border-t border-border pt-2 sm:pt-4 min-w-0 w-full">
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                  Labels like <strong className="text-foreground">spam</strong> send emails to spam, <strong className="text-foreground">important</strong> marks them in your important inbox. Add any custom labels to organize your email however you want.
                 </p>
-                {isDetFormOpen ? (
-                  <div className="space-y-2 sm:space-y-3 rounded-lg border border-border p-2 sm:p-3 w-full">
-                    <Input
-                      value={formDetLabel}
-                      onChange={(e) => setFormDetLabel(e.target.value)}
-                      placeholder="Label (e.g. Redirects)"
-                      className="h-7 sm:h-8 text-xs sm:text-sm w-full"
-                    />
-                    <Textarea
-                      value={formDetPrompt}
-                      onChange={(e) => {
-                        setFormDetPrompt(e.target.value)
-                        e.target.style.height = "auto"
-                        e.target.style.height = `${e.target.scrollHeight}px`
-                      }}
-                      placeholder="Prompt (e.g. does domain redirect?)"
-                      className="min-h-[28px] sm:min-h-[32px] text-xs sm:text-sm resize-none overflow-hidden w-full"
-                      rows={2}
-                    />
-                    <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm">
-                      <Checkbox
-                        checked={formDetEnabled}
-                        onCheckedChange={(c) => setFormDetEnabled(c === true)}
-                        className="h-3.5 w-3.5 sm:h-4 sm:w-4"
-                      />
-                      <span>Enabled</span>
-                    </label>
-                    <div className="flex items-center justify-end gap-1.5 sm:gap-2">
-                      <Button variant="outline" size="sm" onClick={closeDetForm} className="cursor-pointer h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3">
-                        Cancel
-                      </Button>
-                      <Button size="sm" onClick={saveDetForm} className="cursor-pointer h-7 sm:h-8 text-xs sm:text-sm px-2 sm:px-3">
-                        Save
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="max-h-32 sm:max-h-48 overflow-y-auto overflow-x-hidden scrollbar-hide w-full" data-demo-scroll>
-                    <div className="divide-y divide-border w-full">
-                      {savedDeterministicRules.map((rule) => (
-                        <div
-                          key={rule.id}
-                          className="flex items-center justify-between gap-1 sm:gap-2 py-1 sm:p-2 w-full"
-                        >
-                          <label className="flex cursor-pointer items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-                            <Checkbox
-                              checked={rule.enabled}
-                              onCheckedChange={(checked) =>
-                                setDeterministicRuleEnabled(rule.id, checked === true)
-                              }
-                              className="shrink-0 h-3.5 w-3.5 sm:h-4 sm:w-4"
-                            />
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="min-w-0 truncate text-xs sm:text-sm text-foreground">
-                                  {rule.label}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" align="center" className="max-w-xs">
-                                {deterministicResults[selectedEmail?.id ?? ""]?.explanations[rule.label] ?? rule.prompt}
-                              </TooltipContent>
-                            </Tooltip>
-                          </label>
-                          <div className="flex shrink-0 items-center gap-0">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openEditDetForm(rule)}
-                              className="h-6 w-6 sm:h-8 sm:w-8 cursor-pointer"
-                              aria-label="Edit rule"
-                            >
-                              <Pencil className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeDetRule(rule.id)}
-                              className="h-6 w-6 sm:h-8 sm:w-8 cursor-pointer"
-                              aria-label="Delete rule"
-                            >
-                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </Card>
           </div>
@@ -644,8 +537,7 @@ export function InteractiveDemo() {
               <div className="space-y-0 divide-y divide-border flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide w-full" data-demo-scroll>
                 {emails.map((email) => {
                     const aiLabels = getEmailLabels(email.id)
-                    const detLabels = getDeterministicLabels(email)
-                    const labels = [...aiLabels, ...detLabels]
+                    const labels = aiLabels
                     const isSelected = selectedEmail?.id === email.id
 
                     return (
