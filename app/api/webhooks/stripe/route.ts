@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { retrieveForWebhook } from '@/lib/token-store';
 import { encryptForStripe } from '@/lib/encryption';
+import { getOAuthCredentials } from '@/lib/gmail-oauth';
+import { initializeGmail, setWatch } from '@/lib/gmail';
 
 // Lazy initialization to avoid issues during build time
 function getStripe(): Stripe {
@@ -104,6 +106,32 @@ export async function POST(request: NextRequest) {
         `✅ Updated Stripe customer ${customerId} with encrypted metadata for ${customerEmail}` +
           (sheetId ? ' (includes google_sheet_id)' : '')
       );
+
+      // Set up Gmail Watch so we receive push notifications for new mail (optional)
+      const topicName = process.env.GMAIL_PUBSUB_TOPIC;
+      if (topicName?.trim()) {
+        try {
+          const { clientId, clientSecret } = getOAuthCredentials();
+          initializeGmail({
+            clientId,
+            clientSecret,
+            refreshToken,
+          });
+          const { expiration, historyId } = await setWatch(topicName.trim());
+          await stripe.customers.update(customerId, {
+            metadata: {
+              ...metadata,
+              gmail_watch_expiration: expiration,
+              gmail_history_id: historyId,
+            },
+          });
+          console.log(`✅ Gmail watch set for ${customerEmail}, expires ${expiration}`);
+        } catch (watchErr: unknown) {
+          const msg = watchErr instanceof Error ? watchErr.message : String(watchErr);
+          console.error(`⚠️ Gmail watch setup failed for ${customerEmail}:`, msg);
+          // Do not fail the webhook so Stripe does not retry
+        }
+      }
 
       return NextResponse.json({ received: true, customerId });
     }

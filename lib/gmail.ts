@@ -261,6 +261,76 @@ export async function getEmail(messageId: string): Promise<Email> {
   );
 }
 
+export interface ListHistoryResult {
+  messageIds: string[];
+  /** Mailbox historyId after this list; store and use as startHistoryId for the next sync. */
+  newHistoryId: string | undefined;
+}
+
+/**
+ * List message IDs from history after a given startHistoryId (for Gmail push notifications).
+ * Call initializeGmail first so the client is set for the user whose mailbox to query.
+ * Uses the last known historyId (from previous list response or watch), not the notification's
+ * historyId—see Gmail sync docs. Returns IDs of messages added and the new historyId to store.
+ */
+export async function listHistory(startHistoryId: string): Promise<ListHistoryResult> {
+  const client = getClient();
+  const gmail = google.gmail({ version: 'v1', auth: client });
+  const messageIds: string[] = [];
+  let pageToken: string | undefined;
+  let lastHistoryId: string | undefined;
+
+  do {
+    const response = await gmail.users.history.list({
+      userId: 'me',
+      startHistoryId,
+      maxResults: 100,
+      historyTypes: ['messageAdded'],
+      pageToken,
+    });
+
+    const history = response.data.history || [];
+    for (const record of history) {
+      const added = record.messagesAdded || [];
+      for (const item of added) {
+        if (item.message?.id) {
+          messageIds.push(item.message.id);
+        }
+      }
+      if (record.id) lastHistoryId = record.id;
+    }
+    // Response also has top-level historyId (mailbox current); use it for next sync
+    if (response.data.historyId) lastHistoryId = response.data.historyId;
+
+    pageToken = response.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
+  return { messageIds, newHistoryId: lastHistoryId };
+}
+
+/**
+ * Set up Gmail push watch for the authenticated user (call initializeGmail first).
+ * topicName must be the full Pub/Sub topic, e.g. projects/my-project/topics/gmail-watch.
+ * Returns expiration (epoch ms) and historyId; store historyId and use as startHistoryId for history.list.
+ */
+export async function setWatch(topicName: string): Promise<{ expiration: string; historyId: string }> {
+  const client = getClient();
+  const gmail = google.gmail({ version: 'v1', auth: client });
+  const response = await gmail.users.watch({
+    userId: 'me',
+    requestBody: { topicName },
+  });
+  const expiration = response.data.expiration;
+  const historyId = response.data.historyId;
+  if (!expiration) {
+    throw new Error('Gmail watch response missing expiration');
+  }
+  if (!historyId) {
+    throw new Error('Gmail watch response missing historyId');
+  }
+  return { expiration, historyId };
+}
+
 export interface EmailWithHeaders {
   email: Email;
   headers: Array<{ name: string; value: string }>;

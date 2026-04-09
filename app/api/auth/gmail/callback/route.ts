@@ -1,52 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { storeRefreshToken } from '@/lib/token-store';
+import { getOAuthCredentials } from '@/lib/gmail-oauth';
 
 const SETUP_COOKIE_MAX_AGE = 30 * 60; // 30 minutes, match token store expiry
-
-interface GoogleCreds {
-  web?: {
-    client_id: string;
-    client_secret: string;
-  };
-  installed?: {
-    client_id: string;
-    client_secret: string;
-  };
-}
-
-function getOAuthCredentials(): { clientId: string; clientSecret: string } {
-  // First try environment variables
-  const envClientId = process.env.GMAIL_CLIENT_ID;
-  const envClientSecret = process.env.GMAIL_CLIENT_SECRET;
-
-  if (envClientId && envClientSecret) {
-    return { clientId: envClientId, clientSecret: envClientSecret };
-  }
-
-  // Fallback to google_creds.json
-  try {
-    const credsPath = join(process.cwd(), 'google_creds.json');
-    const credsContent = readFileSync(credsPath, 'utf-8');
-    const creds: GoogleCreds = JSON.parse(credsContent);
-
-    const webCreds = creds.web || creds.installed;
-    if (webCreds?.client_id && webCreds?.client_secret) {
-      return {
-        clientId: webCreds.client_id,
-        clientSecret: webCreds.client_secret,
-      };
-    }
-  } catch (error: any) {
-    if (error.code !== 'ENOENT') {
-      console.error('Error reading google_creds.json:', error);
-    }
-  }
-
-  throw new Error('Gmail OAuth credentials not found in environment variables or google_creds.json');
-}
 
 /** Base URL for redirects (use NEXT_APP_URL in production so redirects go to the public host, not internal) */
 function getBaseUrl(request: NextRequest): string {
